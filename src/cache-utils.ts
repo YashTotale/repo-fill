@@ -1,19 +1,20 @@
-import { readFileSync } from "fs";
-import { readdir, writeFile } from "fs/promises";
+import { readdir, readFile, writeFile } from "fs/promises";
 import { join } from "path";
 
 const cachePath = join(__dirname, "..", "cache");
 
 export const getCacheContents = async (): Promise<Record<string, string>> => {
   try {
-    const contents = await readdir(cachePath);
+    const files = await readdir(cachePath);
 
-    return contents.reduce((obj, fileName) => {
-      return {
-        ...obj,
-        [fileName]: readFileSync(join(cachePath, fileName), "utf-8"),
-      };
-    }, {});
+    const contents = await Promise.all(
+      files.map(async (file) => readFile(join(cachePath, file), "utf-8"))
+    );
+
+    return files.reduce(
+      (object, file, i) => ({ ...object, [file]: contents[i] }),
+      {}
+    );
   } catch (e) {
     return {};
   }
