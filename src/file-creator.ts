@@ -5,18 +5,20 @@ import { Octokit, RestEndpointMethodTypes } from "@octokit/rest";
 import axios from "axios";
 
 // Internals
-import { getCacheContents, writeToCache } from "./cache-utils";
+import { getCacheContents, writeToCache, Cache } from "./utils/cache-utils";
+import { getTemplates, Templates } from "./utils/template-utils";
 
 config();
 
 yargs(process.argv.slice(2)).argv;
 
-type Cache = Record<string, string>;
-
 const fileCreator = async () => {
   const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 
-  const cache = await getCacheContents();
+  const [cache, templates] = await Promise.all([
+    getCacheContents(),
+    getTemplates(),
+  ]);
 
   const user = await getUserData(octokit, cache);
 
@@ -24,6 +26,9 @@ const fileCreator = async () => {
 
   repos.forEach(async (repo) => {
     const repoContents = await getRepo(repo, cache);
+    const missingFiles = getMissingFiles(repoContents, templates);
+
+    console.log(`Missing for ${repo.name} is ${missingFiles}`);
   });
 };
 
@@ -62,9 +67,12 @@ const getRepos = async (user: UserData, cache: Cache): Promise<Repo[]> => {
   return repos;
 };
 
-type RepoContent = RestEndpointMethodTypes["repos"]["getContent"]["response"]["data"];
+type RepoContent = Extract<
+  RestEndpointMethodTypes["repos"]["getContent"]["response"]["data"],
+  Array<any>
+>;
 
-const getRepo = async (repo: Repo, cache: Cache): Promise<RepoContent[]> => {
+const getRepo = async (repo: Repo, cache: Cache): Promise<RepoContent> => {
   const repoFile = `repo-${repo.name}.json`;
   const cached = cache[repoFile];
 
@@ -78,6 +86,21 @@ const getRepo = async (repo: Repo, cache: Cache): Promise<RepoContent[]> => {
   writeToCache(repoFile, JSON.stringify(repoContents));
 
   return repoContents;
+};
+
+const getMissingFiles = (repoContents: RepoContent, templates: Templates) => {
+  const missing: string[] = [];
+
+  Object.keys(templates).forEach((template) => {
+    const found = repoContents.find((content) => {
+      if (content.type === "file" && content.name === template) return true;
+      return false;
+    });
+
+    if (!found) missing.push(template);
+  });
+
+  return missing;
 };
 
 fileCreator();
