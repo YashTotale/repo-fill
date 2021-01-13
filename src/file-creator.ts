@@ -122,15 +122,15 @@ const getMissingFiles = (
 
     if (found) delete missing[template];
     else {
-      missing[template] = missing[template].replace("{{repo-name}}", repo.name);
-      missing[template] = missing[template].replace(
-        "{{user-name}}",
-        user.name ?? user.login
-      );
-      missing[template] = missing[template].replace(
-        "{{year}}",
-        new Date().getFullYear().toString()
-      );
+      const replacements = {
+        "{{repo-name}}": repo.name,
+        "{{user-name}}": user.name ?? user.login,
+        "{{year}}": new Date().getFullYear().toString(),
+      };
+
+      Object.entries(replacements).forEach(([key, value]) => {
+        missing[template] = missing[template].replace(key, value);
+      });
     }
   });
 
