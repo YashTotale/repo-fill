@@ -26,18 +26,14 @@ const fileCreator = async () => {
 
   repos.forEach(async (repo) => {
     const repoContents = await getRepo(repo, cache);
-    const missingFiles = getMissingFiles(repoContents, templates);
-
-    console.log(`Missing for ${repo.name} is ${missingFiles}`);
+    const missing = getMissingFiles(repoContents, templates);
+    await createFiles(octokit, repo, user, missing);
   });
 };
 
-type UserData = RestEndpointMethodTypes["users"]["getAuthenticated"]["response"]["data"];
+type User = RestEndpointMethodTypes["users"]["getAuthenticated"]["response"]["data"];
 
-const getUserData = async (
-  octokit: Octokit,
-  cache: Cache
-): Promise<UserData> => {
+const getUserData = async (octokit: Octokit, cache: Cache): Promise<User> => {
   const userDataFile = "user-data.json";
   const cached = cache[userDataFile];
 
@@ -53,7 +49,7 @@ const getUserData = async (
 
 type Repo = RestEndpointMethodTypes["repos"]["get"]["response"]["data"];
 
-const getRepos = async (user: UserData, cache: Cache): Promise<Repo[]> => {
+const getRepos = async (user: User, cache: Cache): Promise<Repo[]> => {
   const reposFile = "repos.json";
   const cached = cache[reposFile];
 
@@ -78,18 +74,23 @@ const getRepo = async (repo: Repo, cache: Cache): Promise<RepoContent> => {
 
   if (typeof cached === "string") return JSON.parse(cached);
 
+  return createRepoCache(repo);
+};
+
+const createRepoCache = async (repo: Repo) => {
+  const repoFile = `repo-${repo.name}.json`;
+
   console.log(`Getting repo '${repo.name}'...`);
   const { data: repoContents } = await axios.get(
     repo.contents_url.replace("{+path}", "")
   );
 
   writeToCache(repoFile, JSON.stringify(repoContents));
-
   return repoContents;
 };
 
 const getMissingFiles = (repoContents: RepoContent, templates: Templates) => {
-  const missing: string[] = [];
+  const missing = { ...templates };
 
   Object.keys(templates).forEach((template) => {
     const found = repoContents.find((content) => {
@@ -97,10 +98,31 @@ const getMissingFiles = (repoContents: RepoContent, templates: Templates) => {
       return false;
     });
 
-    if (!found) missing.push(template);
+    if (found) delete missing[template];
   });
 
   return missing;
+};
+
+const createFiles = async (
+  octokit: Octokit,
+  repo: Repo,
+  user: User,
+  missing: Templates
+) => {
+  console.log(`Missing for ${repo.name} is ${Object.keys(missing)}`);
+
+  Object.entries(missing).forEach(([key, value]) => {
+    octokit.repos.createOrUpdateFileContents({
+      owner: user.login ?? "",
+      repo: repo.name,
+      content: Buffer.from(value).toString("base64"),
+      message: `Added ${key}`,
+      path: key,
+    });
+  });
+
+  await createRepoCache(repo);
 };
 
 fileCreator();
