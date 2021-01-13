@@ -34,7 +34,11 @@ const fileCreator = async () => {
   const repos = await getRepos(user, cache);
 
   for (const repo of repos) {
-    const [repoContents] = await getRepo(repo, templateDirs, cache);
+    const [repoContents, repoDirContents] = await getRepo(
+      repo,
+      templateDirs,
+      cache
+    );
 
     const missingFiles = getMissingFiles(
       repoContents,
@@ -43,11 +47,12 @@ const fileCreator = async () => {
       templateFiles
     );
 
-    getMissingDirs(repo, templateDirs, cache);
-
+    console.log(`\nCreating files for '${repo.name}'...`);
     if (Object.keys(missingFiles).length) {
       await createFiles(octokit, repo, repoContents, user, missingFiles);
     }
+
+    await createMissingDirs(octokit, repo, repoDirContents, user, templateDirs);
   }
 };
 
@@ -110,12 +115,11 @@ const getRepo = async (
   else {
     console.log(`Getting repo '${repo.name}' dirs...`);
     for (const dir in templateDirs) {
-      const found = repoFileContents.find((content) => {
-        if (content.type === "dir" && content.name === dir) return true;
-        return false;
-      });
+      const found = repoFileContents.find(
+        (content) => content.type === "dir" && content.name === dir
+      );
 
-      if (typeof found === "undefined") repoDirContents[dir] = {};
+      if (typeof found === "undefined") repoDirContents[dir] = [];
       else {
         const { data: dirContents } = await axios.get(found.url);
         repoDirContents[dir] = dirContents;
@@ -157,10 +161,9 @@ const getMissingFiles = (
   const missing = { ...templates };
 
   Object.keys(templates).forEach((template) => {
-    const found = repoContents.find((content) => {
-      if (content.type === "file" && content.name === template) return true;
-      return false;
-    });
+    const found = repoContents.find(
+      (content) => content.type === "file" && content.name === template
+    );
 
     if (found) delete missing[template];
     else {
@@ -179,10 +182,45 @@ const getMissingFiles = (
   return missing;
 };
 
-const getMissingDirs = (repo: Repo, templates: TemplateDirs, cache: Cache) => {
-  Object.entries(templates).forEach(([key, value]) => {
-    console.log(key, value);
-  });
+const createMissingDirs = async (
+  octokit: Octokit,
+  repo: Repo,
+  repoDirContents: Record<string, ArrRepoContent>,
+  user: User,
+  templates: TemplateDirs
+) => {
+  for (const dir in templates) {
+    const files = templates[dir];
+    const corresponding = repoDirContents[dir];
+
+    for (const file in files) {
+      const found = corresponding.find(
+        (content) => content.type === "file" && content.name === file
+      );
+
+      if (!found) {
+        const path = `${dir}/${file}`;
+        console.log(`\nCreating file '${path}'...`);
+
+        const { data } = await octokit.repos.createOrUpdateFileContents({
+          owner: user.login,
+          repo: repo.name,
+          content: Buffer.from(files[file]).toString("base64"),
+          message: `Added ${path}`,
+          path,
+        });
+
+        repoDirContents[dir].push(data.content);
+
+        await writeToCache(
+          `repo-dirs/repo-${repo.name}-dirs.json`,
+          JSON.stringify(repoDirContents)
+        );
+
+        await addToGeneratedFile(repo.name, [path]);
+      }
+    }
+  }
 };
 
 const createFiles = async (
@@ -192,10 +230,8 @@ const createFiles = async (
   user: User,
   missing: TemplateFiles
 ) => {
-  console.log(`\nCreating files for '${repo.name}'...`);
-
   for (const file in missing) {
-    console.log(`Creating file '${file}' `);
+    console.log(`Creating file '${file}'...`);
 
     const contents = missing[file];
 
