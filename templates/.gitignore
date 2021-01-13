@@ -1,0 +1,30 @@
+# See https://help.github.com/articles/ignoring-files/ for more information on ignoring files.
+
+# dependencies
+node_modules/
+
+# testing
+coverage/
+
+# production
+dist/
+out/
+build/
+
+# packaged files
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# private/secret files
+*.der
+*.key
+*.pem
+
+# misc
+.DS_Store
