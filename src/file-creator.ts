@@ -23,7 +23,9 @@ const fileCreator = async () => {
 
   const cache = await getCacheContents();
 
-  const templates = await getTemplates();
+  const [templateFiles, templateDirs] = await getTemplates();
+
+  console.log(templateDirs);
 
   const user = await getUserData(octokit, cache);
 
@@ -32,7 +34,7 @@ const fileCreator = async () => {
   for (const repo of repos) {
     const repoContents = await getRepo(repo, cache);
 
-    const missing = getMissingFiles(repoContents, repo, user, templates);
+    const missing = getMissingFiles(repoContents, repo, user, templateFiles);
 
     if (Object.keys(missing).length) {
       await createFiles(octokit, repo, repoContents, user, missing);
