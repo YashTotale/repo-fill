@@ -18,6 +18,7 @@ cache/
 .env*
 !.env.example
 .npmrc
+generated.json
 
 CONFIDENTIAL.*
 

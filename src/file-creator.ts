@@ -7,6 +7,10 @@ import axios from "axios";
 // Internals
 import { getCacheContents, writeToCache, Cache } from "./utils/cache-utils";
 import { getTemplates, Templates } from "./utils/template-utils";
+import {
+  addToGeneratedFile,
+  deleteGeneratedFile,
+} from "./utils/generated-utils";
 
 config();
 
@@ -15,22 +19,25 @@ yargs(process.argv.slice(2)).argv;
 const fileCreator = async () => {
   const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 
-  const [cache, templates] = await Promise.all([
-    getCacheContents(),
-    getTemplates(),
-  ]);
+  await deleteGeneratedFile();
+
+  const cache = await getCacheContents();
+
+  const templates = await getTemplates();
 
   const user = await getUserData(octokit, cache);
 
   const repos = await getRepos(user, cache);
 
-  repos.forEach(async (repo) => {
+  for (const repo of repos) {
     const repoContents = await getRepo(repo, cache);
+
     const missing = getMissingFiles(repoContents, templates);
+
     if (Object.keys(missing).length) {
       await createFiles(octokit, repo, user, missing);
     }
-  });
+  }
 };
 
 type User = RestEndpointMethodTypes["users"]["getAuthenticated"]["response"]["data"];
@@ -114,18 +121,23 @@ const createFiles = async (
 ) => {
   console.log(`Creating files for '${repo.name}'...`);
 
-  Object.entries(missing).forEach(([key, value]) => {
-    console.log(`Creating file '${key}' for '${repo.name}'`);
+  for (const file in missing) {
+    console.log(`Creating file '${file}' `);
+
+    const contents = missing[file];
+
     octokit.repos.createOrUpdateFileContents({
-      owner: user.login ?? "",
+      owner: user.login,
       repo: repo.name,
-      content: Buffer.from(value).toString("base64"),
-      message: `Added ${key}`,
-      path: key,
+      content: Buffer.from(contents).toString("base64"),
+      message: `Added ${file}`,
+      path: file,
     });
-  });
+  }
 
   await createRepoCache(repo);
+
+  await addToGeneratedFile(repo.name, Object.keys(missing));
 };
 
 fileCreator();
