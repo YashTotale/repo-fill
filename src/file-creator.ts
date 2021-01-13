@@ -144,7 +144,7 @@ const createFiles = async (
   user: User,
   missing: Templates
 ) => {
-  console.log(`Creating files for '${repo.name}'...`);
+  console.log(`\nCreating files for '${repo.name}'...`);
 
   for (const file in missing) {
     console.log(`Creating file '${file}' `);
