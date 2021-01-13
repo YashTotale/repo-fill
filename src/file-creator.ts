@@ -32,7 +32,7 @@ const fileCreator = async () => {
   for (const repo of repos) {
     const repoContents = await getRepo(repo, cache);
 
-    const missing = getMissingFiles(repoContents, repo, templates);
+    const missing = getMissingFiles(repoContents, repo, user, templates);
 
     if (Object.keys(missing).length) {
       await createFiles(octokit, repo, repoContents, user, missing);
@@ -109,6 +109,7 @@ const createRepoCache = async (
 const getMissingFiles = (
   repoContents: ArrRepoContent,
   repo: Repo,
+  user: User,
   templates: Templates
 ) => {
   const missing = { ...templates };
@@ -122,6 +123,14 @@ const getMissingFiles = (
     if (found) delete missing[template];
     else {
       missing[template] = missing[template].replace("{{repo-name}}", repo.name);
+      missing[template] = missing[template].replace(
+        "{{user-name}}",
+        user.name ?? user.login
+      );
+      missing[template] = missing[template].replace(
+        "{{year}}",
+        new Date().getFullYear().toString()
+      );
     }
   });
 
