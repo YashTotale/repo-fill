@@ -27,7 +27,9 @@ const fileCreator = async () => {
   repos.forEach(async (repo) => {
     const repoContents = await getRepo(repo, cache);
     const missing = getMissingFiles(repoContents, templates);
-    await createFiles(octokit, repo, user, missing);
+    if (Object.keys(missing).length) {
+      await createFiles(octokit, repo, user, missing);
+    }
   });
 };
 
@@ -110,9 +112,10 @@ const createFiles = async (
   user: User,
   missing: Templates
 ) => {
-  console.log(`Missing for ${repo.name} is ${Object.keys(missing)}`);
+  console.log(`Creating files for '${repo.name}'...`);
 
   Object.entries(missing).forEach(([key, value]) => {
+    console.log(`Creating file '${key}' for '${repo.name}'`);
     octokit.repos.createOrUpdateFileContents({
       owner: user.login ?? "",
       repo: repo.name,
