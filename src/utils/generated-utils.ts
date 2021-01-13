@@ -10,14 +10,19 @@ export const deleteGeneratedFile = async () => {
 export const addToGeneratedFile = async (repo: string, files: string[]) => {
   try {
     const current = await readFile(generatedPath, "utf-8");
-    const json = JSON.parse(current);
+    try {
+      const json = JSON.parse(current);
 
-    const newJson = {
-      ...json,
-      [repo]: json.repo ? [...json.repo, ...files] : [...files],
-    };
+      const newJson = {
+        ...json,
+        [repo]: json.repo ? [...json.repo, ...files] : [...files],
+      };
 
-    await writeFile(generatedPath, JSON.stringify(newJson), "utf-8");
+      await writeFile(generatedPath, JSON.stringify(newJson), "utf-8");
+    } catch (e) {
+      console.error(e);
+      process.exit(1);
+    }
   } catch (e) {
     const json = {
       [repo]: [...files],
