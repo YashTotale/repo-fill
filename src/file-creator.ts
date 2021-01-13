@@ -6,7 +6,11 @@ import axios from "axios";
 
 // Internals
 import { getCacheContents, writeToCache, Cache } from "./utils/cache-utils";
-import { getTemplates, Templates } from "./utils/template-utils";
+import {
+  getTemplates,
+  TemplateDirs,
+  TemplateFiles,
+} from "./utils/template-utils";
 import {
   addToGeneratedFile,
   deleteGeneratedFile,
@@ -25,19 +29,24 @@ const fileCreator = async () => {
 
   const [templateFiles, templateDirs] = await getTemplates();
 
-  console.log(templateDirs);
-
   const user = await getUserData(octokit, cache);
 
   const repos = await getRepos(user, cache);
 
   for (const repo of repos) {
-    const repoContents = await getRepo(repo, cache);
+    const [repoContents] = await getRepo(repo, templateDirs, cache);
 
-    const missing = getMissingFiles(repoContents, repo, user, templateFiles);
+    const missingFiles = getMissingFiles(
+      repoContents,
+      repo,
+      user,
+      templateFiles
+    );
 
-    if (Object.keys(missing).length) {
-      await createFiles(octokit, repo, repoContents, user, missing);
+    getMissingDirs(repo, templateDirs, cache);
+
+    if (Object.keys(missingFiles).length) {
+      await createFiles(octokit, repo, repoContents, user, missingFiles);
     }
   }
 };
@@ -78,13 +87,44 @@ type BaseRepoContent = RestEndpointMethodTypes["repos"]["getContent"]["response"
 
 type ArrRepoContent = Extract<BaseRepoContent, Array<any>>;
 
-const getRepo = async (repo: Repo, cache: Cache): Promise<ArrRepoContent> => {
-  const repoFile = `repo-${repo.name}.json`;
-  const cached = cache[repoFile];
+const getRepo = async (
+  repo: Repo,
+  templateDirs: TemplateDirs,
+  cache: Cache
+): Promise<[ArrRepoContent, any]> => {
+  const repoFile = `repo-files/repo-${repo.name}.json`;
+  const repoDirFile = `repo-dirs/repo-${repo.name}-dirs.json`;
 
-  if (typeof cached === "string") return JSON.parse(cached);
+  const cachedFile = cache[repoFile];
+  const cachedDirFile = cache[repoDirFile];
 
-  return createRepoCache(repo);
+  let repoFileContents: ArrRepoContent;
+
+  if (typeof cachedFile === "string") repoFileContents = JSON.parse(cachedFile);
+  else repoFileContents = await createRepoCache(repo);
+
+  let repoDirContents = {};
+
+  if (typeof cachedDirFile === "string")
+    repoDirContents = JSON.parse(cachedDirFile);
+  else {
+    console.log(`Getting repo '${repo.name}' dirs...`);
+    for (const dir in templateDirs) {
+      const found = repoFileContents.find((content) => {
+        if (content.type === "dir" && content.name === dir) return true;
+        return false;
+      });
+
+      if (typeof found === "undefined") repoDirContents[dir] = {};
+      else {
+        const { data: dirContents } = await axios.get(found.url);
+        repoDirContents[dir] = dirContents;
+      }
+    }
+    writeToCache(repoDirFile, JSON.stringify(repoDirContents));
+  }
+
+  return [repoFileContents, repoDirContents];
 };
 
 const createRepoCache = async (
@@ -92,7 +132,7 @@ const createRepoCache = async (
   addition?: RestEndpointMethodTypes["repos"]["createOrUpdateFileContents"]["response"]["data"]["content"],
   existingRepoContents?: ArrRepoContent
 ) => {
-  const repoFile = `repo-${repo.name}.json`;
+  const repoFile = `repo-files/repo-${repo.name}.json`;
 
   if (!addition) {
     console.log(`Getting repo '${repo.name}'...`);
@@ -112,7 +152,7 @@ const getMissingFiles = (
   repoContents: ArrRepoContent,
   repo: Repo,
   user: User,
-  templates: Templates
+  templates: TemplateFiles
 ) => {
   const missing = { ...templates };
 
@@ -139,12 +179,18 @@ const getMissingFiles = (
   return missing;
 };
 
+const getMissingDirs = (repo: Repo, templates: TemplateDirs, cache: Cache) => {
+  Object.entries(templates).forEach(([key, value]) => {
+    console.log(key, value);
+  });
+};
+
 const createFiles = async (
   octokit: Octokit,
   repo: Repo,
   repoContents: ArrRepoContent,
   user: User,
-  missing: Templates
+  missing: TemplateFiles
 ) => {
   console.log(`\nCreating files for '${repo.name}'...`);
 

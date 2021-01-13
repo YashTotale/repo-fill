@@ -1,5 +1,7 @@
-import { readdir, readFile, writeFile } from "fs/promises";
-import { join } from "path";
+import { readFile, writeFile } from "fs/promises";
+import { join, relative } from "path";
+
+import recursive from "recursive-readdir";
 
 export type Cache = Record<string, string>;
 
@@ -7,14 +9,17 @@ const cachePath = join(__dirname, "..", "..", "cache");
 
 export const getCacheContents = async (): Promise<Cache> => {
   try {
-    const files = await readdir(cachePath);
+    const files = await recursive(cachePath);
 
     const contents = await Promise.all(
-      files.map(async (file) => readFile(join(cachePath, file), "utf-8"))
+      files.map(async (file) => readFile(file, "utf-8"))
     );
 
     return files.reduce(
-      (object, file, i) => ({ ...object, [file]: contents[i] }),
+      (object, file, i) => ({
+        ...object,
+        [relative(join(__dirname, "..", "..", "cache"), file)]: contents[i],
+      }),
       {}
     );
   } catch (e) {

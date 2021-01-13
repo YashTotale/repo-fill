@@ -1,7 +1,9 @@
 import { readdir, readFile } from "fs/promises";
 import { join } from "path";
 
-export type Templates = Record<string, string>;
+export type TemplateFiles = Record<string, string>;
+
+export type TemplateDirs = Record<string, Record<string, string>>;
 
 const templatesPath = join(__dirname, "..", "..", "templates");
 
@@ -9,7 +11,7 @@ export const getTemplates = async () => {
   return Promise.all([getTemplateFiles(), getTemplateDirs()]);
 };
 
-export const getTemplateFiles = async (): Promise<Templates> => {
+export const getTemplateFiles = async (): Promise<TemplateFiles> => {
   const filesPath = join(templatesPath, "files");
 
   const files = await readdir(filesPath);
@@ -24,12 +26,12 @@ export const getTemplateFiles = async (): Promise<Templates> => {
   );
 };
 
-export const getTemplateDirs = async () => {
+export const getTemplateDirs = async (): Promise<TemplateDirs> => {
   const dirsPath = join(templatesPath, "dirs");
 
   const dirs = await readdir(dirsPath);
 
-  const dirContents: Record<string, Record<string, string>> = {};
+  const dirContents: TemplateDirs = {};
 
   for (const dir of dirs) {
     const dirPath = join(dirsPath, dir);
