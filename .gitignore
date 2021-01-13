@@ -12,6 +12,8 @@ dist/
 out/
 
 # misc
+cache/
+
 .DS_Store
 .env*
 !.env.example
