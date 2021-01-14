@@ -1,9 +1,14 @@
 import { readdir, readFile } from "fs/promises";
-import { join } from "path";
+import { join, relative } from "path";
+
+import recursive from "recursive-readdir";
 
 export type TemplateFiles = Record<string, string>;
 
-export type TemplateDirs = Record<string, Record<string, string>>;
+export type TemplateDirs = Record<
+  string,
+  Record<string, string | Record<string, string>>
+>;
 
 const templatesPath = join(__dirname, "..", "..", "templates");
 
@@ -36,10 +41,28 @@ export const getTemplateDirs = async (): Promise<TemplateDirs> => {
   for (const dir of dirs) {
     const dirPath = join(dirsPath, dir);
 
-    const files = await readdir(dirPath);
-    for (const file of files) {
-      const fileContents = await readFile(join(dirPath, file), "utf-8");
-      dirContents[dir] = { ...dirContents[dir], [file]: fileContents };
+    const items = await readdir(dirPath);
+    for (const item of items) {
+      const itemPath = join(dirPath, item);
+      try {
+        const contents = await readFile(itemPath, "utf-8");
+        dirContents[dir] = {
+          ...dirContents[dir],
+          [item]: contents,
+        };
+      } catch (e) {
+        const contents = await readdir(itemPath, "utf-8");
+        dirContents[dir] = {
+          ...dirContents[dir],
+          [item]: (
+            await Promise.all(
+              contents.map((file) => readFile(join(itemPath, file), "utf-8"))
+            )
+          ).reduce((obj, fileContent, i) => {
+            return { ...obj, [contents[i]]: fileContent };
+          }, {} as Record<string, string>),
+        };
+      }
     }
   }
 

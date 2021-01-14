@@ -47,12 +47,13 @@ const fileCreator = async () => {
       templateFiles
     );
 
-    console.log(`\nCreating files for '${repo.name}'...`);
+    console.log(`Creating files for '${repo.name}'...`);
     if (Object.keys(missingFiles).length) {
       await createFiles(octokit, repo, repoContents, user, missingFiles);
     }
 
     await createMissingDirs(octokit, repo, repoDirContents, user, templateDirs);
+    console.log();
   }
 };
 
@@ -92,11 +93,13 @@ type BaseRepoContent = RestEndpointMethodTypes["repos"]["getContent"]["response"
 
 type ArrRepoContent = Extract<BaseRepoContent, Array<any>>;
 
+type DirRepoContent = Record<string, ArrRepoContent>;
+
 const getRepo = async (
   repo: Repo,
   templateDirs: TemplateDirs,
   cache: Cache
-): Promise<[ArrRepoContent, any]> => {
+): Promise<[ArrRepoContent, DirRepoContent]> => {
   const repoFile = `repo-files/repo-${repo.name}.json`;
   const repoDirFile = `repo-dirs/repo-${repo.name}-dirs.json`;
 
@@ -108,7 +111,7 @@ const getRepo = async (
   if (typeof cachedFile === "string") repoFileContents = JSON.parse(cachedFile);
   else repoFileContents = await createRepoCache(repo);
 
-  let repoDirContents = {};
+  let repoDirContents: DirRepoContent = {};
 
   if (typeof cachedDirFile === "string")
     repoDirContents = JSON.parse(cachedDirFile);
@@ -121,7 +124,24 @@ const getRepo = async (
 
       if (typeof found === "undefined") repoDirContents[dir] = [];
       else {
-        const { data: dirContents } = await axios.get(found.url);
+        let {
+          data: dirContents,
+        }: {
+          data: ArrRepoContent;
+        } = await axios.get(found.url);
+
+        for (const content of dirContents) {
+          if (content.type === "dir") {
+            const type = typeof templateDirs[dir];
+            if (type !== "undefined" && type !== "string") {
+              const { data }: { data: ArrRepoContent } = await axios.get(
+                content.url
+              );
+              dirContents = dirContents.concat(data);
+            }
+          }
+        }
+
         repoDirContents[dir] = dirContents;
       }
     }
@@ -190,34 +210,67 @@ const createMissingDirs = async (
   templates: TemplateDirs
 ) => {
   for (const dir in templates) {
-    const files = templates[dir];
+    const contents = templates[dir];
     const corresponding = repoDirContents[dir];
 
-    for (const file in files) {
-      const found = corresponding.find(
-        (content) => content.type === "file" && content.name === file
-      );
+    for (const content in contents) {
+      const value = contents[content];
 
-      if (!found) {
-        const path = `${dir}/${file}`;
-        console.log(`\nCreating file '${path}'...`);
-
-        const { data } = await octokit.repos.createOrUpdateFileContents({
-          owner: user.login,
-          repo: repo.name,
-          content: Buffer.from(files[file]).toString("base64"),
-          message: `Added ${path}`,
-          path,
-        });
-
-        repoDirContents[dir].push(data.content);
-
-        await writeToCache(
-          `repo-dirs/repo-${repo.name}-dirs.json`,
-          JSON.stringify(repoDirContents)
+      if (typeof value === "string") {
+        const found = corresponding.find(
+          (real) => real.type === "file" && real.name === content
         );
 
-        await addToGeneratedFile(repo.name, [path]);
+        if (!found) {
+          const path = `${dir}/${content}`;
+          console.log(`Creating file '${path}'...`);
+
+          const { data } = await octokit.repos.createOrUpdateFileContents({
+            owner: user.login,
+            repo: repo.name,
+            content: Buffer.from(value).toString("base64"),
+            message: `Added ${path}`,
+            path,
+          });
+
+          repoDirContents[dir].push(data.content);
+
+          await writeToCache(
+            `repo-dirs/repo-${repo.name}-dirs.json`,
+            JSON.stringify(repoDirContents)
+          );
+
+          await addToGeneratedFile(repo.name, [path]);
+        }
+      } else {
+        for (const file in value) {
+          const path = `${dir}/${content}/${file}`;
+
+          const found = corresponding.find(
+            (real) => real.type === "file" && real.path === path
+          );
+
+          if (!found) {
+            console.log(`Creating file '${path}'...`);
+
+            const { data } = await octokit.repos.createOrUpdateFileContents({
+              owner: user.login,
+              repo: repo.name,
+              content: Buffer.from(value[file]).toString("base64"),
+              message: `Added ${path}`,
+              path,
+            });
+
+            repoDirContents[dir].push(data.content);
+
+            await writeToCache(
+              `repo-dirs/repo-${repo.name}-dirs.json`,
+              JSON.stringify(repoDirContents)
+            );
+
+            await addToGeneratedFile(repo.name, [path]);
+          }
+        }
       }
     }
   }

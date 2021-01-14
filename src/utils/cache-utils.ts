@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "fs/promises";
+import { readdir, readFile, writeFile, mkdir } from "fs/promises";
 import { join, relative } from "path";
 
 import recursive from "recursive-readdir";
@@ -18,7 +18,7 @@ export const getCacheContents = async (): Promise<Cache> => {
     return files.reduce(
       (object, file, i) => ({
         ...object,
-        [relative(join(__dirname, "..", "..", "cache"), file)]: contents[i],
+        [relative(cachePath, file)]: contents[i],
       }),
       {}
     );
@@ -28,5 +28,15 @@ export const getCacheContents = async (): Promise<Cache> => {
 };
 
 export const writeToCache = async (file: string, data: string) => {
+  const dirs = [join(cachePath, "repo-files"), join(cachePath, "repo-dirs")];
+
+  for (const dir of dirs) {
+    try {
+      await readdir(dir);
+    } catch (e) {
+      await mkdir(dir, { recursive: true });
+    }
+  }
+
   await writeFile(join(cachePath, file), data, "utf-8");
 };
