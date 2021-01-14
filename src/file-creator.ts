@@ -20,6 +20,10 @@ config();
 
 yargs(process.argv.slice(2)).argv;
 
+const REPO_FILE = (repo: Repo) => `repo-files/repo-${repo.name}.json`;
+const REPO_DIR = (repo: Repo) => `repo-dirs/repo-${repo.name}-dirs.json`;
+const REPO_LABELS = (repo: Repo) => `repo-labels/repo-${repo.name}.json`;
+
 const fileCreator = async () => {
   const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 
@@ -34,7 +38,8 @@ const fileCreator = async () => {
   const repos = await getRepos(user, cache);
 
   for (const repo of repos) {
-    const [repoContents, repoDirContents] = await getRepo(
+    console.log(repo.name);
+    const [repoContents, repoDirContents, repoLabelContents] = await getRepo(
       repo,
       templateDirs,
       cache
@@ -47,12 +52,12 @@ const fileCreator = async () => {
       templateFiles
     );
 
-    console.log(`Creating files for '${repo.name}'...`);
     if (Object.keys(missingFiles).length) {
       await createFiles(octokit, repo, repoContents, user, missingFiles);
     }
 
     await createMissingDirs(octokit, repo, repoDirContents, user, templateDirs);
+    await createMissingLabels(octokit, repo, user, repoLabelContents);
     console.log();
   }
 };
@@ -135,13 +140,9 @@ const getRepo = async (
   templateDirs: TemplateDirs,
   cache: Cache
 ): Promise<[ArrRepoContent, DirRepoContent, RepoLabels]> => {
-  const repoFile = `repo-files/repo-${repo.name}.json`;
-  const repoDirFile = `repo-dirs/repo-${repo.name}-dirs.json`;
-  const repoLabelsFile = `repo-labels/repo-${repo.name}.json`;
-
-  const cachedFile = cache[repoFile];
-  const cachedDirFile = cache[repoDirFile];
-  const cachedLabelsFile = cache[repoLabelsFile];
+  const cachedFile = cache[REPO_FILE(repo)];
+  const cachedDirFile = cache[REPO_DIR(repo)];
+  const cachedLabelsFile = cache[REPO_LABELS(repo)];
 
   let repoFileContents: ArrRepoContent;
 
@@ -169,7 +170,7 @@ const getRepoFiles = async (
   addition?: RestEndpointMethodTypes["repos"]["createOrUpdateFileContents"]["response"]["data"]["content"],
   existingRepoContents?: ArrRepoContent
 ) => {
-  const repoFile = `repo-files/repo-${repo.name}.json`;
+  const repoFile = REPO_FILE(repo);
 
   if (!addition) {
     console.log(`Getting repo '${repo.name}'...`);
@@ -191,7 +192,6 @@ const getRepoDirs = async (
   repoFileContents: ArrRepoContent
 ) => {
   const repoDirContents: DirRepoContent = {};
-  const repoDirFile = `repo-dirs/repo-${repo.name}-dirs.json`;
 
   console.log(`Getting repo '${repo.name}' dirs...`);
   for (const dir in templateDirs) {
@@ -222,17 +222,16 @@ const getRepoDirs = async (
       repoDirContents[dir] = dirContents;
     }
   }
-  writeToCache(repoDirFile, JSON.stringify(repoDirContents));
+  writeToCache(REPO_DIR(repo), JSON.stringify(repoDirContents));
   return repoDirContents;
 };
 
 const getRepoLabels = async (repo: Repo) => {
-  const repoLabelsFile = `repo-labels/repo-${repo.name}.json`;
   console.log(`Getting repo '${repo.name}' labels...`);
   const { data: repoLabels } = await axios.get(
     repo.labels_url.replace("{/name}", "")
   );
-  writeToCache(repoLabelsFile, JSON.stringify(repoLabels));
+  writeToCache(REPO_LABELS(repo), JSON.stringify(repoLabels));
   return repoLabels;
 };
 
@@ -255,74 +254,6 @@ const getMissingFiles = (
   return missing;
 };
 
-const createMissingDirs = async (
-  octokit: Octokit,
-  repo: Repo,
-  repoDirContents: Record<string, ArrRepoContent>,
-  user: User,
-  templates: TemplateDirs
-) => {
-  for (const dir in templates) {
-    const contents = templates[dir];
-    const corresponding = repoDirContents[dir];
-
-    for (const content in contents) {
-      const value = contents[content];
-
-      if (typeof value === "string") {
-        const found = corresponding.find(
-          (real) => real.type === "file" && real.name === content
-        );
-
-        if (!found) {
-          const path = `${dir}/${content}`;
-          console.log(`Creating file '${path}'...`);
-
-          const { data } = await commitFile(octokit, repo, user, value, path);
-
-          repoDirContents[dir].push(data.content);
-
-          await writeToCache(
-            `repo-dirs/repo-${repo.name}-dirs.json`,
-            JSON.stringify(repoDirContents)
-          );
-
-          await addToGeneratedFile(repo.name, [path]);
-        }
-      } else {
-        for (const file in value) {
-          const path = `${dir}/${content}/${file}`;
-
-          const found = corresponding.find(
-            (real) => real.type === "file" && real.path === path
-          );
-
-          if (!found) {
-            console.log(`Creating file '${path}'...`);
-
-            const { data } = await commitFile(
-              octokit,
-              repo,
-              user,
-              value[file],
-              path
-            );
-
-            repoDirContents[dir].push(data.content);
-
-            await writeToCache(
-              `repo-dirs/repo-${repo.name}-dirs.json`,
-              JSON.stringify(repoDirContents)
-            );
-
-            await addToGeneratedFile(repo.name, [path]);
-          }
-        }
-      }
-    }
-  }
-};
-
 const createFiles = async (
   octokit: Octokit,
   repo: Repo,
@@ -341,6 +272,90 @@ const createFiles = async (
   }
 
   await addToGeneratedFile(repo.name, Object.keys(missing));
+};
+
+const createMissingDirs = async (
+  octokit: Octokit,
+  repo: Repo,
+  repoDirContents: Record<string, ArrRepoContent>,
+  user: User,
+  templates: TemplateDirs
+) => {
+  const create = async (path: string, dir: string, content: string) => {
+    console.log(`Creating file '${path}'...`);
+
+    const { data } = await commitFile(octokit, repo, user, content, path);
+
+    repoDirContents[dir].push(data.content);
+
+    await writeToCache(REPO_DIR(repo), JSON.stringify(repoDirContents));
+
+    await addToGeneratedFile(repo.name, [path]);
+  };
+  for (const dir in templates) {
+    const contents = templates[dir];
+    const corresponding = repoDirContents[dir];
+
+    for (const content in contents) {
+      const value = contents[content];
+
+      if (typeof value === "string") {
+        const found = corresponding.find(
+          (real) => real.type === "file" && real.name === content
+        );
+
+        if (!found) await create(`${dir}/${content}`, dir, value);
+      } else {
+        for (const file in value) {
+          const path = `${dir}/${content}/${file}`;
+
+          const found = corresponding.find(
+            (real) => real.type === "file" && real.path === path
+          );
+
+          if (!found) await create(path, dir, content);
+        }
+      }
+    }
+  }
+};
+
+const createMissingLabels = async (
+  octokit: Octokit,
+  repo: Repo,
+  user: User,
+  repoLabelContents: RepoLabels
+) => {
+  const requiredLabels = {
+    stale: {
+      description: "No activity",
+      color: "ebdcb5",
+    },
+    "feature-request": {
+      description: "New feature",
+      color: "340EDA",
+    },
+  };
+
+  for (const label in requiredLabels) {
+    const found = repoLabelContents.find((l) => l.name === label);
+    const properties = requiredLabels[label];
+
+    if (!found) {
+      console.log(`Creating label '${label}'...`);
+      const { data } = await octokit.issues.createLabel({
+        owner: repo.owner?.login ?? user.login,
+        repo: repo.name,
+        name: label,
+        color: properties.color,
+        description: properties.description,
+      });
+
+      repoLabelContents.push(data);
+
+      await writeToCache(REPO_LABELS(repo), JSON.stringify(repoLabelContents));
+    }
+  }
 };
 
 const commitFile = async (
