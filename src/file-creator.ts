@@ -321,6 +321,7 @@ const commitFile = async (
 ) => {
   const replacements = {
     "{{repo-name}}": repo.name,
+    "{{repo-full-name}}": repo.full_name,
     "{{user-name}}": user.name ?? user.login,
     "{{year}}": new Date().getFullYear().toString(),
   };
