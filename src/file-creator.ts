@@ -186,17 +186,6 @@ const getMissingFiles = (
     );
 
     if (found) delete missing[template];
-    else {
-      const replacements = {
-        "{{repo-name}}": repo.name,
-        "{{user-name}}": user.name ?? user.login,
-        "{{year}}": new Date().getFullYear().toString(),
-      };
-
-      Object.entries(replacements).forEach(([key, value]) => {
-        missing[template] = missing[template].replace(key, value);
-      });
-    }
   });
 
   return missing;
@@ -225,13 +214,7 @@ const createMissingDirs = async (
           const path = `${dir}/${content}`;
           console.log(`Creating file '${path}'...`);
 
-          const { data } = await octokit.repos.createOrUpdateFileContents({
-            owner: user.login,
-            repo: repo.name,
-            content: Buffer.from(value).toString("base64"),
-            message: `Added ${path}`,
-            path,
-          });
+          const { data } = await commitFile(octokit, repo, user, value, path);
 
           repoDirContents[dir].push(data.content);
 
@@ -253,13 +236,13 @@ const createMissingDirs = async (
           if (!found) {
             console.log(`Creating file '${path}'...`);
 
-            const { data } = await octokit.repos.createOrUpdateFileContents({
-              owner: user.login,
-              repo: repo.name,
-              content: Buffer.from(value[file]).toString("base64"),
-              message: `Added ${path}`,
-              path,
-            });
+            const { data } = await commitFile(
+              octokit,
+              repo,
+              user,
+              value[file],
+              path
+            );
 
             repoDirContents[dir].push(data.content);
 
@@ -288,18 +271,38 @@ const createFiles = async (
 
     const contents = missing[file];
 
-    const { data } = await octokit.repos.createOrUpdateFileContents({
-      owner: user.login,
-      repo: repo.name,
-      content: Buffer.from(contents).toString("base64"),
-      message: `Added ${file}`,
-      path: file,
-    });
+    const { data } = await commitFile(octokit, repo, user, contents, file);
 
     await createRepoCache(repo, data.content, repoContents);
   }
 
   await addToGeneratedFile(repo.name, Object.keys(missing));
+};
+
+const commitFile = async (
+  octokit: Octokit,
+  repo: Repo,
+  user: User,
+  content: string,
+  path: string
+) => {
+  const replacements = {
+    "{{repo-name}}": repo.name,
+    "{{user-name}}": user.name ?? user.login,
+    "{{year}}": new Date().getFullYear().toString(),
+  };
+
+  Object.entries(replacements).forEach(([key, value]) => {
+    content = content.replaceAll(key, value);
+  });
+
+  return octokit.repos.createOrUpdateFileContents({
+    owner: user.login,
+    repo: repo.name,
+    content: Buffer.from(content).toString("base64"),
+    message: `Added ${path}`,
+    path,
+  });
 };
 
 fileCreator();
