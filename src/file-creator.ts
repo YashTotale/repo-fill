@@ -128,63 +128,43 @@ type ArrRepoContent = Extract<BaseRepoContent, Array<any>>;
 
 type DirRepoContent = Record<string, ArrRepoContent>;
 
+type RepoLabels = RestEndpointMethodTypes["issues"]["getLabel"]["response"]["data"][];
+
 const getRepo = async (
   repo: Repo,
   templateDirs: TemplateDirs,
   cache: Cache
-): Promise<[ArrRepoContent, DirRepoContent]> => {
+): Promise<[ArrRepoContent, DirRepoContent, RepoLabels]> => {
   const repoFile = `repo-files/repo-${repo.name}.json`;
   const repoDirFile = `repo-dirs/repo-${repo.name}-dirs.json`;
+  const repoLabelsFile = `repo-labels/repo-${repo.name}.json`;
 
   const cachedFile = cache[repoFile];
   const cachedDirFile = cache[repoDirFile];
+  const cachedLabelsFile = cache[repoLabelsFile];
 
   let repoFileContents: ArrRepoContent;
 
   if (typeof cachedFile === "string") repoFileContents = JSON.parse(cachedFile);
-  else repoFileContents = await createRepoCache(repo);
+  else repoFileContents = await getRepoFiles(repo);
 
   let repoDirContents: DirRepoContent = {};
 
   if (typeof cachedDirFile === "string")
     repoDirContents = JSON.parse(cachedDirFile);
-  else {
-    console.log(`Getting repo '${repo.name}' dirs...`);
-    for (const dir in templateDirs) {
-      const found = repoFileContents.find(
-        (content) => content.type === "dir" && content.name === dir
-      );
+  else
+    repoDirContents = await getRepoDirs(repo, templateDirs, repoFileContents);
 
-      if (typeof found === "undefined") repoDirContents[dir] = [];
-      else {
-        let {
-          data: dirContents,
-        }: {
-          data: ArrRepoContent;
-        } = await axios.get(found.url);
+  let repoLabelContents;
 
-        for (const content of dirContents) {
-          if (content.type === "dir") {
-            const type = typeof templateDirs[dir];
-            if (type !== "undefined" && type !== "string") {
-              const { data }: { data: ArrRepoContent } = await axios.get(
-                content.url
-              );
-              dirContents = dirContents.concat(data);
-            }
-          }
-        }
+  if (typeof cachedLabelsFile === "string")
+    repoLabelContents = JSON.parse(cachedLabelsFile);
+  else repoLabelContents = await getRepoLabels(repo);
 
-        repoDirContents[dir] = dirContents;
-      }
-    }
-    writeToCache(repoDirFile, JSON.stringify(repoDirContents));
-  }
-
-  return [repoFileContents, repoDirContents];
+  return [repoFileContents, repoDirContents, repoLabelContents];
 };
 
-const createRepoCache = async (
+const getRepoFiles = async (
   repo: Repo,
   addition?: RestEndpointMethodTypes["repos"]["createOrUpdateFileContents"]["response"]["data"]["content"],
   existingRepoContents?: ArrRepoContent
@@ -203,6 +183,57 @@ const createRepoCache = async (
     writeToCache(repoFile, JSON.stringify(existingRepoContents));
     return existingRepoContents;
   }
+};
+
+const getRepoDirs = async (
+  repo: Repo,
+  templateDirs: TemplateDirs,
+  repoFileContents: ArrRepoContent
+) => {
+  const repoDirContents: DirRepoContent = {};
+  const repoDirFile = `repo-dirs/repo-${repo.name}-dirs.json`;
+
+  console.log(`Getting repo '${repo.name}' dirs...`);
+  for (const dir in templateDirs) {
+    const found = repoFileContents.find(
+      (content) => content.type === "dir" && content.name === dir
+    );
+
+    if (typeof found === "undefined") repoDirContents[dir] = [];
+    else {
+      let {
+        data: dirContents,
+      }: {
+        data: ArrRepoContent;
+      } = await axios.get(found.url);
+
+      for (const content of dirContents) {
+        if (content.type === "dir") {
+          const type = typeof templateDirs[dir];
+          if (type !== "undefined" && type !== "string") {
+            const { data }: { data: ArrRepoContent } = await axios.get(
+              content.url
+            );
+            dirContents = dirContents.concat(data);
+          }
+        }
+      }
+
+      repoDirContents[dir] = dirContents;
+    }
+  }
+  writeToCache(repoDirFile, JSON.stringify(repoDirContents));
+  return repoDirContents;
+};
+
+const getRepoLabels = async (repo: Repo) => {
+  const repoLabelsFile = `repo-labels/repo-${repo.name}.json`;
+  console.log(`Getting repo '${repo.name}' labels...`);
+  const { data: repoLabels } = await axios.get(
+    repo.labels_url.replace("{/name}", "")
+  );
+  writeToCache(repoLabelsFile, JSON.stringify(repoLabels));
+  return repoLabels;
 };
 
 const getMissingFiles = (
@@ -306,7 +337,7 @@ const createFiles = async (
 
     const { data } = await commitFile(octokit, repo, user, contents, file);
 
-    await createRepoCache(repo, data.content, repoContents);
+    await getRepoFiles(repo, data.content, repoContents);
   }
 
   await addToGeneratedFile(repo.name, Object.keys(missing));

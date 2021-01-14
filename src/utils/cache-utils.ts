@@ -31,6 +31,7 @@ export const writeToCache = async (file: string, data: string) => {
   const dirs = [
     join(cachePath, "repo-files"),
     join(cachePath, "repo-dirs"),
+    join(cachePath, "repo-labels"),
     join(cachePath, "org-repos"),
   ];
 
