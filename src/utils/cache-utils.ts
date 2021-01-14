@@ -28,7 +28,11 @@ export const getCacheContents = async (): Promise<Cache> => {
 };
 
 export const writeToCache = async (file: string, data: string) => {
-  const dirs = [join(cachePath, "repo-files"), join(cachePath, "repo-dirs")];
+  const dirs = [
+    join(cachePath, "repo-files"),
+    join(cachePath, "repo-dirs"),
+    join(cachePath, "org-repos"),
+  ];
 
   for (const dir of dirs) {
     try {

@@ -1,7 +1,5 @@
 import { readdir, readFile } from "fs/promises";
-import { join, relative } from "path";
-
-import recursive from "recursive-readdir";
+import { join } from "path";
 
 export type TemplateFiles = Record<string, string>;
 

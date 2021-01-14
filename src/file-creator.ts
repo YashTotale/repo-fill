@@ -75,16 +75,49 @@ const getUserData = async (octokit: Octokit, cache: Cache): Promise<User> => {
 
 type Repo = RestEndpointMethodTypes["repos"]["get"]["response"]["data"];
 
+type Org = RestEndpointMethodTypes["orgs"]["get"]["response"]["data"];
+
 const getRepos = async (user: User, cache: Cache): Promise<Repo[]> => {
   const reposFile = "repos.json";
-  const cached = cache[reposFile];
+  const orgsFile = "orgs.json";
 
-  if (typeof cached === "string") return JSON.parse(cached);
+  const cachedFiles = cache[reposFile];
+  const cachedOrgs = cache[orgsFile];
 
-  console.log("Getting repos...");
-  const { data: repos } = await axios.get(user.repos_url);
+  let repos: Repo[] = [];
 
+  if (typeof cachedFiles === "string") repos = JSON.parse(cachedFiles);
+  else {
+    console.log("Getting repos...");
+    const { data } = await axios.get(user.repos_url);
+    repos = data;
+  }
+
+  let orgs: Org[] = [];
+  if (typeof cachedOrgs === "string") orgs = JSON.parse(cachedOrgs);
+  else {
+    console.log("Getting orgs...");
+    const { data } = await axios.get(user.organizations_url);
+    orgs = data;
+  }
   writeToCache(reposFile, JSON.stringify(repos));
+
+  for (const org of orgs) {
+    const orgFile = `org-repos/${org.login}.json`;
+    const cachedOrg = cache[orgFile];
+
+    let orgRepos;
+    if (typeof cachedOrg === "string") orgRepos = JSON.parse(cachedOrg);
+    else {
+      console.log(`Getting org ${org.login}...`);
+      const { data } = await axios.get(org.repos_url);
+      orgRepos = data;
+    }
+    repos = repos.concat(orgRepos);
+    writeToCache(orgFile, JSON.stringify(orgRepos));
+  }
+
+  writeToCache(orgsFile, JSON.stringify(orgs));
 
   return repos;
 };
@@ -297,7 +330,7 @@ const commitFile = async (
   });
 
   return octokit.repos.createOrUpdateFileContents({
-    owner: user.login,
+    owner: repo.owner?.login ?? user.login,
     repo: repo.name,
     content: Buffer.from(content).toString("base64"),
     message: `Added ${path}`,
