@@ -12,6 +12,8 @@ export type TemplateDirs = Record<
   Record<string, string | Record<string, string>>
 >;
 
+export type TemplateLabels = Record<string, Label>;
+
 const templatesPath = join(__dirname, "..", "..", "templates");
 
 export const getTemplates = async () => {
@@ -75,10 +77,10 @@ export const getTemplateDirs = async (): Promise<TemplateDirs> => {
   return dirContents;
 };
 
-export const getTemplateLabels = async () => {
+export const getTemplateLabels = async (): Promise<TemplateLabels> => {
   const labelsPath = join(templatesPath, "labels.json");
 
   const labels = await readFile(labelsPath, "utf-8");
 
-  return JSON.parse(labels) as Record<string, Label>;
+  return JSON.parse(labels);
 };
