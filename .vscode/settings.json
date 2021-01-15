@@ -1,0 +1,20 @@
+{
+  "files.associations": {
+    ".gitignore": "ignore",
+
+    ".env": "text",
+    ".env.example": "text",
+
+    ".markdownlintignore": "ignore",
+    ".markdownlintrc": "json",
+
+    ".prettierignore": "ignore",
+    ".prettierc": "json",
+
+    ".eslintignore": "ignore",
+    ".eslintrc": "json",
+
+    ".huskyrc": "json",
+    ".lintstagedrc": "json"
+  }
+}
