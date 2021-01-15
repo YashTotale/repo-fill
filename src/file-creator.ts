@@ -11,6 +11,7 @@ import {
   TemplateDirs,
   TemplateFiles,
 } from "./utils/template-utils";
+import { getUserData, User } from "./utils/user-utils";
 import {
   addToGeneratedFile,
   deleteGeneratedFile,
@@ -62,22 +63,6 @@ const fileCreator = async () => {
       createMissingLabels(octokit, repo, user, repoLabelContents),
     ]);
   }
-};
-
-type User = RestEndpointMethodTypes["users"]["getAuthenticated"]["response"]["data"];
-
-const getUserData = async (octokit: Octokit, cache: Cache): Promise<User> => {
-  const userDataFile = "user-data.json";
-  const cached = cache[userDataFile];
-
-  if (typeof cached === "string") return JSON.parse(cached);
-
-  console.log("Getting user...");
-  const { data: user } = await octokit.users.getAuthenticated();
-
-  writeToCache(userDataFile, JSON.stringify(user));
-
-  return user;
 };
 
 type Repo = RestEndpointMethodTypes["repos"]["get"]["response"]["data"];
