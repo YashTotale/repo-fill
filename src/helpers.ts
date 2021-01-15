@@ -1,7 +1,6 @@
 // Externals
 import { Octokit } from "@octokit/rest";
 import axios from "axios";
-import { differenceInMinutes } from "date-fns";
 import { rm } from "fs/promises";
 
 // Internals
@@ -17,6 +16,13 @@ export const axiosGet = (url: string) => {
       Authorization: `token ${process.env.GITHUB_TOKEN}`,
     },
   });
+};
+
+export const differenceInMinutes = (d1: Date | number, d2: Date | number) => {
+  if (typeof d1 !== "number") d1 = d1.getTime();
+  if (typeof d2 !== "number") d2 = d2.getTime();
+
+  return ((d1 - d2) / 1000 / 60).toFixed(1);
 };
 
 export const logRateLimit = async (octokit: Octokit) => {
