@@ -2,8 +2,6 @@
 import { config } from "dotenv-safe";
 import yargs from "yargs/yargs";
 import { Octokit, RestEndpointMethodTypes } from "@octokit/rest";
-import axios from "axios";
-import { differenceInMinutes } from "date-fns";
 
 // Internals
 import { getCacheContents, writeToCache, Cache } from "./utils/cache-utils";
@@ -17,6 +15,13 @@ import {
   addToGeneratedFile,
   deleteGeneratedFile,
 } from "./utils/generated-utils";
+import {
+  createLabels,
+  getRepoLabels,
+  RepoLabels,
+} from "./creators/label-creator";
+import { checkOrg, axiosGet, logRateLimit } from "./helpers";
+import { Repo } from "./types";
 
 config();
 
@@ -32,22 +37,9 @@ process.on("unhandledRejection", (e) => {
 
 yargs(process.argv.slice(2)).argv;
 
-const checkOrg = (repo: Repo) =>
-  repo.owner?.type === "Organization" ? `${repo.owner?.login ?? ""}` : "";
-
 const REPO_FILE = (repo: Repo) =>
   `repo-files/${checkOrg(repo)}${repo.name}.json`;
 const REPO_DIR = (repo: Repo) => `repo-dirs/${checkOrg(repo)}${repo.name}.json`;
-const REPO_LABELS = (repo: Repo) =>
-  `repo-labels/${checkOrg(repo)}${repo.name}.json`;
-
-const axiosGet = (url: string) => {
-  return axios.get(url, {
-    headers: {
-      Authorization: `token ${process.env.GITHUB_TOKEN}`,
-    },
-  });
-};
 
 const fileCreator = async () => {
   const octokit = new Octokit({
@@ -82,22 +74,12 @@ const fileCreator = async () => {
         }
       })(),
       createMissingDirs(octokit, repo, repoDirContents, user, templateDirs),
-      createMissingLabels(octokit, repo, user, repoLabelContents),
+      createLabels(octokit, repo, user, repoLabelContents),
     ]);
 
-    const { data: ratelimit } = await octokit.rateLimit.get();
-    console.log(
-      `${ratelimit.rate.remaining} requests remaining out of ${
-        ratelimit.rate.limit
-      }. Resets in ${differenceInMinutes(
-        new Date(ratelimit.rate.reset * 1000),
-        new Date()
-      )}`
-    );
+    await logRateLimit(octokit);
   }
 };
-
-type Repo = RestEndpointMethodTypes["repos"]["get"]["response"]["data"];
 
 type Org = RestEndpointMethodTypes["orgs"]["get"]["response"]["data"];
 
@@ -152,8 +134,6 @@ type ArrRepoContent = Extract<BaseRepoContent, Array<any>>;
 
 type DirRepoContent = Record<string, ArrRepoContent>;
 
-type RepoLabels = RestEndpointMethodTypes["issues"]["getLabel"]["response"]["data"][];
-
 const getRepo = async (
   repo: Repo,
   templateDirs: TemplateDirs,
@@ -161,7 +141,6 @@ const getRepo = async (
 ): Promise<[ArrRepoContent, DirRepoContent, RepoLabels]> => {
   const cachedFile = cache[REPO_FILE(repo)];
   const cachedDirFile = cache[REPO_DIR(repo)];
-  const cachedLabelsFile = cache[REPO_LABELS(repo)];
 
   let repoFileContents: ArrRepoContent;
 
@@ -175,13 +154,7 @@ const getRepo = async (
   else
     repoDirContents = await getRepoDirs(repo, templateDirs, repoFileContents);
 
-  let repoLabelContents;
-
-  if (typeof cachedLabelsFile === "string")
-    repoLabelContents = JSON.parse(cachedLabelsFile);
-  else repoLabelContents = await getRepoLabels(repo);
-
-  return [repoFileContents, repoDirContents, repoLabelContents];
+  return [repoFileContents, repoDirContents, await getRepoLabels(repo, cache)];
 };
 
 const getRepoFiles = async (
@@ -243,15 +216,6 @@ const getRepoDirs = async (
   }
   writeToCache(REPO_DIR(repo), JSON.stringify(repoDirContents));
   return repoDirContents;
-};
-
-const getRepoLabels = async (repo: Repo) => {
-  console.log(`Getting repo '${repo.name}' labels...`);
-  const { data: repoLabels } = await axiosGet(
-    repo.labels_url.replace("{/name}", "")
-  );
-  writeToCache(REPO_LABELS(repo), JSON.stringify(repoLabels));
-  return repoLabels;
 };
 
 const getMissingFiles = (
@@ -333,44 +297,6 @@ const createMissingDirs = async (
           if (!found) await create(path, dir, value[file]);
         }
       }
-    }
-  }
-};
-
-const createMissingLabels = async (
-  octokit: Octokit,
-  repo: Repo,
-  user: User,
-  repoLabelContents: RepoLabels
-) => {
-  const requiredLabels = {
-    stale: {
-      description: "No activity",
-      color: "ebdcb5",
-    },
-    "feature-request": {
-      description: "New feature",
-      color: "340EDA",
-    },
-  };
-
-  for (const label in requiredLabels) {
-    const found = repoLabelContents.find((l) => l.name === label);
-    const properties = requiredLabels[label];
-
-    if (!found) {
-      console.log(`Creating label '${label}'...`);
-      const { data } = await octokit.issues.createLabel({
-        owner: repo.owner?.login ?? user.login,
-        repo: repo.name,
-        name: label,
-        color: properties.color,
-        description: properties.description,
-      });
-
-      repoLabelContents.push(data);
-
-      await writeToCache(REPO_LABELS(repo), JSON.stringify(repoLabelContents));
     }
   }
 };
