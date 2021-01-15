@@ -20,45 +20,47 @@ config();
 
 yargs(process.argv.slice(2)).argv;
 
-const REPO_FILE = (repo: Repo) => `repo-files/repo-${repo.name}.json`;
-const REPO_DIR = (repo: Repo) => `repo-dirs/repo-${repo.name}-dirs.json`;
-const REPO_LABELS = (repo: Repo) => `repo-labels/repo-${repo.name}.json`;
+const checkOrg = (repo: Repo) =>
+  repo.owner?.type === "Organization" ? `${repo.owner?.login ?? ""}-` : "";
+
+const REPO_FILE = (repo: Repo) =>
+  `repo-files/${checkOrg(repo)}${repo.name}.json`;
+const REPO_DIR = (repo: Repo) => `repo-dirs/${checkOrg(repo)}${repo.name}.json`;
+const REPO_LABELS = (repo: Repo) =>
+  `repo-labels/${checkOrg(repo)}${repo.name}.json`;
 
 const fileCreator = async () => {
   const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 
-  await deleteGeneratedFile();
-
-  const cache = await getCacheContents();
-
-  const [templateFiles, templateDirs] = await getTemplates();
+  const [cache, [templateFiles, templateDirs]] = await Promise.all([
+    await getCacheContents(),
+    await getTemplates(),
+    await deleteGeneratedFile(),
+  ]);
 
   const user = await getUserData(octokit, cache);
 
   const repos = await getRepos(user, cache);
 
   for (const repo of repos) {
-    console.log(repo.name);
+    console.log("\n" + repo.name);
     const [repoContents, repoDirContents, repoLabelContents] = await getRepo(
       repo,
       templateDirs,
       cache
     );
 
-    const missingFiles = getMissingFiles(
-      repoContents,
-      repo,
-      user,
-      templateFiles
-    );
+    await Promise.all([
+      (async () => {
+        const missingFiles = getMissingFiles(repoContents, templateFiles);
 
-    if (Object.keys(missingFiles).length) {
-      await createFiles(octokit, repo, repoContents, user, missingFiles);
-    }
-
-    await createMissingDirs(octokit, repo, repoDirContents, user, templateDirs);
-    await createMissingLabels(octokit, repo, user, repoLabelContents);
-    console.log();
+        if (Object.keys(missingFiles).length) {
+          await createFiles(octokit, repo, repoContents, user, missingFiles);
+        }
+      })(),
+      createMissingDirs(octokit, repo, repoDirContents, user, templateDirs),
+      createMissingLabels(octokit, repo, user, repoLabelContents),
+    ]);
   }
 };
 
@@ -237,8 +239,6 @@ const getRepoLabels = async (repo: Repo) => {
 
 const getMissingFiles = (
   repoContents: ArrRepoContent,
-  repo: Repo,
-  user: User,
   templates: TemplateFiles
 ) => {
   const missing = { ...templates };
@@ -313,7 +313,7 @@ const createMissingDirs = async (
             (real) => real.type === "file" && real.path === path
           );
 
-          if (!found) await create(path, dir, content);
+          if (!found) await create(path, dir, value[file]);
         }
       }
     }
