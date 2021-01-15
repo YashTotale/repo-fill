@@ -1,11 +1,6 @@
 {
   "name": "repo-file-creator",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "keywords": [],
-  "author": "",
-  "license": "MIT",
+  "private": true,
   "dependencies": {
     "@octokit/rest": "^18.0.12",
     "@types/recursive-readdir": "^2.2.0",
