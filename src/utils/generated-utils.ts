@@ -1,13 +1,19 @@
-import { rm, readFile, writeFile } from "fs/promises";
+// Externals
+import { existsSync } from "fs";
+import { rm, readFile, writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 
-const generatedPath = join(__dirname, "..", "..", "generated.json");
+// Internals
+import { OUTPUT_PATH } from "../constants";
+
+const generatedPath = join(OUTPUT_PATH, "generated.json");
 
 export const deleteGeneratedFile = async () => {
   await rm(generatedPath, { force: true });
 };
 
 export const addToGeneratedFile = async (repo: string, files: string[]) => {
+  if (!existsSync(OUTPUT_PATH)) await mkdir(OUTPUT_PATH);
   try {
     const current = await readFile(generatedPath, "utf-8");
     try {

@@ -5,6 +5,7 @@
     "@octokit/rest": "^18.0.12",
     "@types/recursive-readdir": "^2.2.0",
     "axios": "^0.21.1",
+    "chalk": "^4.1.0",
     "date-fns": "^2.16.1",
     "recursive-readdir": "^2.2.2",
     "yargs": "^16.2.0"

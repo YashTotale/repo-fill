@@ -2,6 +2,7 @@
 import { config } from "dotenv-safe";
 import yargs from "yargs/yargs";
 import { Octokit, RestEndpointMethodTypes } from "@octokit/rest";
+import { red } from "chalk";
 
 // Internals
 import { getCacheContents, writeToCache, Cache } from "./utils/cache-utils";
@@ -11,29 +12,17 @@ import {
   TemplateFiles,
 } from "./utils/template-utils";
 import { getUserData, User } from "./utils/user-utils";
-import {
-  addToGeneratedFile,
-  deleteGeneratedFile,
-} from "./utils/generated-utils";
+import { addToGeneratedFile } from "./utils/generated-utils";
+import { errorEncountered } from "./utils/error-utils";
 import {
   createLabels,
   getRepoLabels,
   RepoLabels,
 } from "./creators/label-creator";
-import { checkOrg, axiosGet, logRateLimit } from "./helpers";
+import { checkOrg, axiosGet, logRateLimit, deleteOutput } from "./helpers";
 import { Repo } from "./types";
 
 config();
-
-process.on("uncaughtException", (e) => {
-  console.error(e);
-  process.exit(1);
-});
-
-process.on("unhandledRejection", (e) => {
-  console.error(e);
-  process.exit(1);
-});
 
 yargs(process.argv.slice(2)).argv;
 
@@ -50,7 +39,7 @@ const fileCreator = async () => {
   const [cache, [templateFiles, templateDirs]] = await Promise.all([
     await getCacheContents(),
     await getTemplates(),
-    await deleteGeneratedFile(),
+    await deleteOutput(),
   ]);
 
   const user = await getUserData(octokit, cache);
@@ -65,17 +54,17 @@ const fileCreator = async () => {
       cache
     );
 
-    await Promise.all([
-      (async () => {
-        const missingFiles = getMissingFiles(repoContents, templateFiles);
+    await commitFile(octokit, repo, user, "", "test_path.sh");
 
-        if (Object.keys(missingFiles).length) {
-          await createFiles(octokit, repo, repoContents, user, missingFiles);
-        }
-      })(),
-      createMissingDirs(octokit, repo, repoDirContents, user, templateDirs),
-      createLabels(octokit, repo, user, repoLabelContents),
-    ]);
+    const missingFiles = getMissingFiles(repoContents, templateFiles);
+
+    if (Object.keys(missingFiles).length) {
+      await createFiles(octokit, repo, repoContents, user, missingFiles);
+    }
+
+    await createMissingDirs(octokit, repo, repoDirContents, user, templateDirs);
+
+    await createLabels(octokit, repo, user, repoLabelContents);
 
     await logRateLimit(octokit);
   }
@@ -106,7 +95,7 @@ const getRepos = async (user: User, cache: Cache): Promise<Repo[]> => {
     const { data } = await axiosGet(user.organizations_url);
     orgs = data;
   }
-  writeToCache(reposFile, JSON.stringify(repos));
+  await writeToCache(reposFile, JSON.stringify(repos));
 
   for (const org of orgs) {
     const orgFile = `org-repos/${org.login}.json`;
@@ -120,10 +109,10 @@ const getRepos = async (user: User, cache: Cache): Promise<Repo[]> => {
       orgRepos = data;
     }
     repos = repos.concat(orgRepos);
-    writeToCache(orgFile, JSON.stringify(orgRepos));
+    await writeToCache(orgFile, JSON.stringify(orgRepos));
   }
 
-  writeToCache(orgsFile, JSON.stringify(orgs));
+  await writeToCache(orgsFile, JSON.stringify(orgs));
 
   return repos;
 };
@@ -169,11 +158,11 @@ const getRepoFiles = async (
     const { data: repoContents } = await axiosGet(
       repo.contents_url.replace("{+path}", "")
     );
-    writeToCache(repoFile, JSON.stringify(repoContents));
+    await writeToCache(repoFile, JSON.stringify(repoContents));
     return repoContents;
   } else if (existingRepoContents) {
     existingRepoContents.push(addition);
-    writeToCache(repoFile, JSON.stringify(existingRepoContents));
+    await writeToCache(repoFile, JSON.stringify(existingRepoContents));
     return existingRepoContents;
   }
 };
@@ -214,7 +203,7 @@ const getRepoDirs = async (
       repoDirContents[dir] = dirContents;
     }
   }
-  writeToCache(REPO_DIR(repo), JSON.stringify(repoDirContents));
+  await writeToCache(REPO_DIR(repo), JSON.stringify(repoDirContents));
   return repoDirContents;
 };
 
@@ -247,9 +236,11 @@ const createFiles = async (
 
     const contents = missing[file];
 
-    const { data } = await commitFile(octokit, repo, user, contents, file);
+    const response = await commitFile(octokit, repo, user, contents, file);
 
-    await getRepoFiles(repo, data.content, repoContents);
+    if (response !== null) {
+      await getRepoFiles(repo, response.data.content, repoContents);
+    }
   }
 
   await addToGeneratedFile(repo.name, Object.keys(missing));
@@ -265,13 +256,15 @@ const createMissingDirs = async (
   const create = async (path: string, dir: string, content: string) => {
     console.log(`Creating file '${path}'...`);
 
-    const { data } = await commitFile(octokit, repo, user, content, path);
+    const response = await commitFile(octokit, repo, user, content, path);
 
-    repoDirContents[dir].push(data.content);
+    if (response !== null) {
+      repoDirContents[dir].push(response.data.content);
 
-    await writeToCache(REPO_DIR(repo), JSON.stringify(repoDirContents));
+      await writeToCache(REPO_DIR(repo), JSON.stringify(repoDirContents));
 
-    await addToGeneratedFile(repo.name, [path]);
+      await addToGeneratedFile(repo.name, [path]);
+    }
   };
   for (const dir in templates) {
     const contents = templates[dir];
@@ -319,13 +312,19 @@ const commitFile = async (
     content = content.replaceAll(key, value);
   });
 
-  return octokit.repos.createOrUpdateFileContents({
-    owner: repo.owner?.login ?? user.login,
-    repo: repo.name,
-    content: Buffer.from(content).toString("base64"),
-    message: `Added ${path}`,
-    path,
-  });
+  try {
+    throw new Error("Test error");
+    return octokit.repos.createOrUpdateFileContents({
+      owner: repo.owner?.login ?? user.login,
+      repo: repo.name,
+      content: Buffer.from(content).toString("base64"),
+      message: `Added ${path}`,
+      path,
+    });
+  } catch (e) {
+    await errorEncountered(e, red(`Could not create file '${path}'`));
+    return null;
+  }
 };
 
 fileCreator();

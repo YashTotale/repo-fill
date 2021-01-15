@@ -2,8 +2,10 @@
 import { Octokit } from "@octokit/rest";
 import axios from "axios";
 import { differenceInMinutes } from "date-fns";
+import { rm } from "fs/promises";
 
 // Internals
+import { OUTPUT_PATH } from "./constants";
 import { Repo } from "./types";
 
 export const checkOrg = (repo: Repo) =>
@@ -27,4 +29,8 @@ export const logRateLimit = async (octokit: Octokit) => {
       new Date()
     )}`
   );
+};
+
+export const deleteOutput = async () => {
+  await rm(OUTPUT_PATH, { force: true, recursive: true });
 };

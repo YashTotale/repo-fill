@@ -10,6 +10,7 @@ coverage/
 # production
 dist/
 out/
+output/
 
 # misc
 cache/
@@ -18,7 +19,6 @@ cache/
 .env*
 !.env.example
 .npmrc
-generated.json
 
 CONFIDENTIAL.*
 

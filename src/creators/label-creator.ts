@@ -40,7 +40,7 @@ export const getRepoLabels = async (
     const { data: repoLabels } = await axiosGet(
       repo.labels_url.replace("{/name}", "")
     );
-    writeToCache(REPO_LABELS(repo), JSON.stringify(repoLabels));
+    await writeToCache(REPO_LABELS(repo), JSON.stringify(repoLabels));
     return repoLabels;
   }
 };
