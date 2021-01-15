@@ -5,6 +5,7 @@
     "@octokit/rest": "^18.0.12",
     "@types/recursive-readdir": "^2.2.0",
     "axios": "^0.21.1",
+    "date-fns": "^2.16.1",
     "recursive-readdir": "^2.2.2",
     "yargs": "^16.2.0"
   },
@@ -19,6 +20,7 @@
   },
   "scripts": {
     "create": "ts-node src/file-creator.ts",
+    "start": "tsc -p ./ -w",
     "test": "echo \"Error: no test specified\" && exit 1"
   }
 }

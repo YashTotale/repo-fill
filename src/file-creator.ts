@@ -3,6 +3,7 @@ import { config } from "dotenv-safe";
 import yargs from "yargs/yargs";
 import { Octokit, RestEndpointMethodTypes } from "@octokit/rest";
 import axios from "axios";
+import { differenceInMinutes } from "date-fns";
 
 // Internals
 import { getCacheContents, writeToCache, Cache } from "./utils/cache-utils";
@@ -19,10 +20,20 @@ import {
 
 config();
 
+process.on("uncaughtException", (e) => {
+  console.error(e);
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (e) => {
+  console.error(e);
+  process.exit(1);
+});
+
 yargs(process.argv.slice(2)).argv;
 
 const checkOrg = (repo: Repo) =>
-  repo.owner?.type === "Organization" ? `${repo.owner?.login ?? ""}-` : "";
+  repo.owner?.type === "Organization" ? `${repo.owner?.login ?? ""}` : "";
 
 const REPO_FILE = (repo: Repo) =>
   `repo-files/${checkOrg(repo)}${repo.name}.json`;
@@ -30,8 +41,19 @@ const REPO_DIR = (repo: Repo) => `repo-dirs/${checkOrg(repo)}${repo.name}.json`;
 const REPO_LABELS = (repo: Repo) =>
   `repo-labels/${checkOrg(repo)}${repo.name}.json`;
 
+const axiosGet = (url: string) => {
+  return axios.get(url, {
+    headers: {
+      Authorization: `token ${process.env.GITHUB_TOKEN}`,
+    },
+  });
+};
+
 const fileCreator = async () => {
-  const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+  const octokit = new Octokit({
+    auth: `token ${process.env.GITHUB_TOKEN}`,
+    userAgent: "YashTotale",
+  });
 
   const [cache, [templateFiles, templateDirs]] = await Promise.all([
     await getCacheContents(),
@@ -62,6 +84,16 @@ const fileCreator = async () => {
       createMissingDirs(octokit, repo, repoDirContents, user, templateDirs),
       createMissingLabels(octokit, repo, user, repoLabelContents),
     ]);
+
+    const { data: ratelimit } = await octokit.rateLimit.get();
+    console.log(
+      `${ratelimit.rate.remaining} requests remaining out of ${
+        ratelimit.rate.limit
+      }. Resets in ${differenceInMinutes(
+        new Date(ratelimit.rate.reset * 1000),
+        new Date()
+      )}`
+    );
   }
 };
 
@@ -81,7 +113,7 @@ const getRepos = async (user: User, cache: Cache): Promise<Repo[]> => {
   if (typeof cachedFiles === "string") repos = JSON.parse(cachedFiles);
   else {
     console.log("Getting repos...");
-    const { data } = await axios.get(user.repos_url);
+    const { data } = await axiosGet(user.repos_url);
     repos = data;
   }
 
@@ -89,7 +121,7 @@ const getRepos = async (user: User, cache: Cache): Promise<Repo[]> => {
   if (typeof cachedOrgs === "string") orgs = JSON.parse(cachedOrgs);
   else {
     console.log("Getting orgs...");
-    const { data } = await axios.get(user.organizations_url);
+    const { data } = await axiosGet(user.organizations_url);
     orgs = data;
   }
   writeToCache(reposFile, JSON.stringify(repos));
@@ -102,7 +134,7 @@ const getRepos = async (user: User, cache: Cache): Promise<Repo[]> => {
     if (typeof cachedOrg === "string") orgRepos = JSON.parse(cachedOrg);
     else {
       console.log(`Getting org ${org.login}...`);
-      const { data } = await axios.get(org.repos_url);
+      const { data } = await axiosGet(org.repos_url);
       orgRepos = data;
     }
     repos = repos.concat(orgRepos);
@@ -161,7 +193,7 @@ const getRepoFiles = async (
 
   if (!addition) {
     console.log(`Getting repo '${repo.name}'...`);
-    const { data: repoContents } = await axios.get(
+    const { data: repoContents } = await axiosGet(
       repo.contents_url.replace("{+path}", "")
     );
     writeToCache(repoFile, JSON.stringify(repoContents));
@@ -192,13 +224,13 @@ const getRepoDirs = async (
         data: dirContents,
       }: {
         data: ArrRepoContent;
-      } = await axios.get(found.url);
+      } = await axiosGet(found.url);
 
       for (const content of dirContents) {
         if (content.type === "dir") {
           const type = typeof templateDirs[dir];
           if (type !== "undefined" && type !== "string") {
-            const { data }: { data: ArrRepoContent } = await axios.get(
+            const { data }: { data: ArrRepoContent } = await axiosGet(
               content.url
             );
             dirContents = dirContents.concat(data);
@@ -215,7 +247,7 @@ const getRepoDirs = async (
 
 const getRepoLabels = async (repo: Repo) => {
   console.log(`Getting repo '${repo.name}' labels...`);
-  const { data: repoLabels } = await axios.get(
+  const { data: repoLabels } = await axiosGet(
     repo.labels_url.replace("{/name}", "")
   );
   writeToCache(REPO_LABELS(repo), JSON.stringify(repoLabels));
