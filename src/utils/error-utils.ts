@@ -12,8 +12,6 @@ export const errorEncountered = async (e: Error, message: string) => {
   defineErrorToJson();
   if (!existsSync(OUTPUT_PATH)) await mkdir(OUTPUT_PATH);
 
-  console.log(JSON.stringify(e));
-
   let errors: Error[];
   try {
     const errs = await readFile(ERRORS_FILE_PATH, "utf-8");

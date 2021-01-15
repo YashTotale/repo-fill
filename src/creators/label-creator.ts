@@ -12,21 +12,10 @@ export type RepoLabels = RestEndpointMethodTypes["issues"]["getLabel"]["response
 export const REPO_LABELS = (repo: Repo) =>
   `repo-labels/${checkOrg(repo)}${repo.name}.json`;
 
-interface Label {
+export interface Label {
   description: string;
   color: string;
 }
-
-export const REQUIRED_LABELS: Record<string, Label> = {
-  stale: {
-    description: "No activity",
-    color: "ebdcb5",
-  },
-  "feature-request": {
-    description: "New feature",
-    color: "340EDA",
-  },
-};
 
 export const getRepoLabels = async (
   repo: Repo,
@@ -49,11 +38,12 @@ export const createLabels = async (
   octokit: Octokit,
   repo: Repo,
   user: User,
-  repoLabelContents: RepoLabels
+  repoLabelContents: RepoLabels,
+  templateLabels: Record<string, Label>
 ) => {
-  for (const label in REQUIRED_LABELS) {
+  for (const label in templateLabels) {
     const found = repoLabelContents.find((l) => l.name === label);
-    const properties = REQUIRED_LABELS[label];
+    const properties = templateLabels[label];
 
     if (!found) {
       console.log(`Creating label '${label}'...`);

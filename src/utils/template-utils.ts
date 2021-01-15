@@ -1,5 +1,9 @@
+// Externals
 import { readdir, readFile } from "fs/promises";
 import { join } from "path";
+
+// Internals
+import { Label } from "../creators/label-creator";
 
 export type TemplateFiles = Record<string, string>;
 
@@ -11,7 +15,11 @@ export type TemplateDirs = Record<
 const templatesPath = join(__dirname, "..", "..", "templates");
 
 export const getTemplates = async () => {
-  return Promise.all([getTemplateFiles(), getTemplateDirs()]);
+  return Promise.all([
+    getTemplateFiles(),
+    getTemplateDirs(),
+    getTemplateLabels(),
+  ]);
 };
 
 export const getTemplateFiles = async (): Promise<TemplateFiles> => {
@@ -65,4 +73,12 @@ export const getTemplateDirs = async (): Promise<TemplateDirs> => {
   }
 
   return dirContents;
+};
+
+export const getTemplateLabels = async () => {
+  const labelsPath = join(templatesPath, "labels.json");
+
+  const labels = await readFile(labelsPath, "utf-8");
+
+  return JSON.parse(labels) as Record<string, Label>;
 };

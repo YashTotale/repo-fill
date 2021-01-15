@@ -36,7 +36,10 @@ const fileCreator = async () => {
     userAgent: "YashTotale",
   });
 
-  const [cache, [templateFiles, templateDirs]] = await Promise.all([
+  const [
+    cache,
+    [templateFiles, templateDirs, templateLabels],
+  ] = await Promise.all([
     await getCacheContents(),
     await getTemplates(),
     await deleteOutput(),
@@ -54,8 +57,6 @@ const fileCreator = async () => {
       cache
     );
 
-    await commitFile(octokit, repo, user, "", "test_path.sh");
-
     const missingFiles = getMissingFiles(repoContents, templateFiles);
 
     if (Object.keys(missingFiles).length) {
@@ -64,7 +65,7 @@ const fileCreator = async () => {
 
     await createMissingDirs(octokit, repo, repoDirContents, user, templateDirs);
 
-    await createLabels(octokit, repo, user, repoLabelContents);
+    await createLabels(octokit, repo, user, repoLabelContents, templateLabels);
 
     await logRateLimit(octokit);
   }
@@ -313,7 +314,6 @@ const commitFile = async (
   });
 
   try {
-    throw new Error("Test error");
     return octokit.repos.createOrUpdateFileContents({
       owner: repo.owner?.login ?? user.login,
       repo: repo.name,

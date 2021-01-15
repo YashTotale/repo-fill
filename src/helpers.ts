@@ -27,7 +27,7 @@ export const logRateLimit = async (octokit: Octokit) => {
     }. Resets in ${differenceInMinutes(
       new Date(ratelimit.rate.reset * 1000),
       new Date()
-    )}`
+    )} minutes.`
   );
 };
 

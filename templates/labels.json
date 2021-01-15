@@ -1,0 +1,10 @@
+{
+  "stale": {
+    "description": "No activity",
+    "color": "ebdcb5"
+  },
+  "feature-request": {
+    "description": "New feature",
+    "color": "340EDA"
+  }
+}
