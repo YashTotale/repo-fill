@@ -1,11 +1,49 @@
 // Externals
-import { Octokit } from "@octokit/rest";
-import axios, { AxiosResponse } from "axios";
 import { rm } from "fs/promises";
+import { Octokit, RestEndpointMethodTypes } from "@octokit/rest";
+import axios, { AxiosResponse } from "axios";
+import { red } from "chalk";
 
 // Internals
+import { User } from "./utils/user-utils";
 import { OUTPUT_PATH } from "./constants";
 import { Repo } from "./types";
+import { errorEncountered } from "./utils/error-utils";
+
+export const commitFile = async (
+  octokit: Octokit,
+  repo: Repo,
+  user: User,
+  content: string,
+  path: string
+): Promise<
+  | RestEndpointMethodTypes["repos"]["createOrUpdateFileContents"]["response"]
+  | null
+> => {
+  const replacements = {
+    "{{repo-name}}": repo.name,
+    "{{repo-full-name}}": repo.full_name,
+    "{{user-name}}": user.name ?? user.login,
+    "{{year}}": new Date().getFullYear().toString(),
+  };
+
+  Object.entries(replacements).forEach(([key, value]) => {
+    content = content.replaceAll(key, value);
+  });
+
+  try {
+    return octokit.repos.createOrUpdateFileContents({
+      owner: repo.owner?.login ?? user.login,
+      repo: repo.name,
+      content: Buffer.from(content).toString("base64"),
+      message: `(automated) Added ${path}`,
+      path,
+    });
+  } catch (e) {
+    await errorEncountered(e, red(`Could not create file '${path}'`));
+    return null;
+  }
+};
 
 export const checkOrg = (repo: Repo): string =>
   repo.owner?.type === "Organization" ? repo.owner?.login + "-" : "";
