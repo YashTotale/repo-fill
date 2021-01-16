@@ -318,7 +318,7 @@ const commitFile = async (
       owner: repo.owner?.login ?? user.login,
       repo: repo.name,
       content: Buffer.from(content).toString("base64"),
-      message: `Added ${path}`,
+      message: `(automated) Added ${path}`,
       path,
     });
   } catch (e) {

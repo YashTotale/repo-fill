@@ -1,5 +1,5 @@
 {
-  "name": "repo-file-creator",
+  "name": "repo-fill",
   "private": true,
   "dependencies": {
     "@octokit/rest": "^18.0.12",
@@ -26,7 +26,7 @@
     "typescript": "^4.1.3"
   },
   "scripts": {
-    "create": "ts-node src/file-creator.ts",
+    "fill": "ts-node src/repo-fill.ts",
     "start": "tsc -p ./ -w",
     "build": "tsc -p ./",
     "lint": "bash scripts/lint.sh"
