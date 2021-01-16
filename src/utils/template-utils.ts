@@ -16,7 +16,9 @@ export type TemplateLabels = Record<string, Label>;
 
 const templatesPath = join(__dirname, "..", "..", "templates");
 
-export const getTemplates = async () => {
+export const getTemplates = async (): Promise<
+  [TemplateFiles, TemplateDirs, TemplateLabels]
+> => {
   return Promise.all([
     getTemplateFiles(),
     getTemplateDirs(),

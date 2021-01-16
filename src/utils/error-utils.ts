@@ -8,7 +8,10 @@ import { OUTPUT_PATH } from "../constants";
 
 const ERRORS_FILE_PATH = join(OUTPUT_PATH, "errors.json");
 
-export const errorEncountered = async (e: Error, message: string) => {
+export const errorEncountered = async (
+  e: Error,
+  message: string
+): Promise<void> => {
   defineErrorToJson();
   if (!existsSync(OUTPUT_PATH)) await mkdir(OUTPUT_PATH);
 
@@ -31,10 +34,10 @@ const defineErrorToJson = () => {
   if (!("toJSON" in Error.prototype))
     Object.defineProperty(Error.prototype, "toJSON", {
       value: function () {
-        var alt = {};
+        const alt = {};
 
         Object.getOwnPropertyNames(this).forEach(function (key) {
-          //@ts-ignore
+          //@ts-expect-error Not sure how to type 'this' TODO: correctly type 'this'
           alt[key] = this[key];
         }, this);
 

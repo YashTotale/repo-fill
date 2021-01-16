@@ -27,7 +27,10 @@ export const getCacheContents = async (): Promise<Cache> => {
   }
 };
 
-export const writeToCache = async (file: string, data: string) => {
+export const writeToCache = async (
+  file: string,
+  data: string
+): Promise<void> => {
   const dirs = [
     join(cachePath, "repo-files"),
     join(cachePath, "repo-dirs"),

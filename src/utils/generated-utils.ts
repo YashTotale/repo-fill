@@ -8,11 +8,14 @@ import { OUTPUT_PATH } from "../constants";
 
 const generatedPath = join(OUTPUT_PATH, "generated.json");
 
-export const deleteGeneratedFile = async () => {
+export const deleteGeneratedFile = async (): Promise<void> => {
   await rm(generatedPath, { force: true });
 };
 
-export const addToGeneratedFile = async (repo: string, files: string[]) => {
+export const addToGeneratedFile = async (
+  repo: string,
+  files: string[]
+): Promise<void> => {
   if (!existsSync(OUTPUT_PATH)) await mkdir(OUTPUT_PATH);
   try {
     const current = await readFile(generatedPath, "utf-8");

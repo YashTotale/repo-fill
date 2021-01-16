@@ -9,7 +9,7 @@ import { Repo } from "../types";
 
 export type RepoLabels = RestEndpointMethodTypes["issues"]["getLabel"]["response"]["data"][];
 
-export const REPO_LABELS = (repo: Repo) =>
+export const REPO_LABELS = (repo: Repo): string =>
   `repo-labels/${checkOrg(repo)}${repo.name}.json`;
 
 export interface Label {
@@ -40,7 +40,7 @@ export const createLabels = async (
   user: User,
   repoLabelContents: RepoLabels,
   templateLabels: Record<string, Label>
-) => {
+): Promise<void> => {
   for (const label in templateLabels) {
     const found = repoLabelContents.find((l) => l.name === label);
     const properties = templateLabels[label];

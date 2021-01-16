@@ -8,3 +8,6 @@ coverage/
 dist/
 out/
 build/
+
+# cache
+cache/
