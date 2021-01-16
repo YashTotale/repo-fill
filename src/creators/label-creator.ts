@@ -3,6 +3,7 @@ import { Octokit, RestEndpointMethodTypes } from "@octokit/rest";
 
 // Internals
 import { writeToCache, Cache } from "../utils/cache-utils";
+import { errorEncountered } from "../utils/error-utils";
 import { User } from "../utils/user-utils";
 import { checkOrg, axiosGet } from "../helpers";
 import { Repo } from "../types";
@@ -47,17 +48,24 @@ export const createLabels = async (
 
     if (!found) {
       console.log(`Creating label '${label}'...`);
-      const { data } = await octokit.issues.createLabel({
-        owner: repo.owner?.login ?? user.login,
-        repo: repo.name,
-        name: label,
-        color: properties.color,
-        description: properties.description,
-      });
+      try {
+        const { data } = await octokit.issues.createLabel({
+          owner: repo.owner?.login ?? user.login,
+          repo: repo.name,
+          name: label,
+          color: properties.color,
+          description: properties.description,
+        });
 
-      repoLabelContents.push(data);
+        repoLabelContents.push(data);
 
-      await writeToCache(REPO_LABELS(repo), JSON.stringify(repoLabelContents));
+        await writeToCache(
+          REPO_LABELS(repo),
+          JSON.stringify(repoLabelContents)
+        );
+      } catch (e) {
+        errorEncountered(e, `Could not create label '${label}'`);
+      }
     }
   }
 };

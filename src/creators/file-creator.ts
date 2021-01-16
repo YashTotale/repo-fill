@@ -22,7 +22,7 @@ export const getRepoFiles = async (
 
   if (typeof cachedFile === "string") return JSON.parse(cachedFile);
 
-  console.log(`Getting repo '${repo.name}'...`);
+  console.log(`Getting repo '${repo.name}' files...`);
   const { data: repoContents } = await axiosGet(
     repo.contents_url.replace("{+path}", "")
   );

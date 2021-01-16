@@ -7,27 +7,23 @@ import { Octokit, RestEndpointMethodTypes } from "@octokit/rest";
 import { getCacheContents, writeToCache, Cache } from "./utils/cache-utils";
 import { getTemplates, TemplateDirs } from "./utils/template-utils";
 import { getUserData, User } from "./utils/user-utils";
-import { addToGeneratedFile } from "./utils/generated-utils";
 import {
   createLabels,
   getRepoLabels,
   RepoLabels,
 } from "./creators/label-creator";
-import {
-  checkOrg,
-  axiosGet,
-  logRateLimit,
-  deleteOutput,
-  commitFile,
-} from "./helpers";
+import { axiosGet, logRateLimit, deleteOutput } from "./helpers";
 import { Repo } from "./types";
 import { createFiles, getRepoFiles, RepoFiles } from "./creators/file-creator";
+import {
+  createMissingDirs,
+  getRepoDirs,
+  RepoDirs,
+} from "./creators/dir-creator";
 
 config();
 
 yargs(process.argv.slice(2)).argv;
-
-const REPO_DIR = (repo: Repo) => `repo-dirs/${checkOrg(repo)}${repo.name}.json`;
 
 const fileCreator = async () => {
   const octokit = new Octokit({
@@ -113,113 +109,23 @@ const getRepos = async (user: User, cache: Cache): Promise<Repo[]> => {
   return repos;
 };
 
-type DirRepoContent = Record<string, RepoFiles>;
-
 const getRepo = async (
   repo: Repo,
   templateDirs: TemplateDirs,
   cache: Cache
-): Promise<[RepoFiles, DirRepoContent, RepoLabels]> => {
-  const cachedDirFile = cache[REPO_DIR(repo)];
-
+): Promise<[RepoFiles, RepoDirs, RepoLabels]> => {
   const repoFileContents = await getRepoFiles(repo, cache);
 
-  let repoDirContents: DirRepoContent = {};
-
-  if (typeof cachedDirFile === "string")
-    repoDirContents = JSON.parse(cachedDirFile);
-  else
-    repoDirContents = await getRepoDirs(repo, templateDirs, repoFileContents);
+  const repoDirContents = await getRepoDirs(
+    repo,
+    templateDirs,
+    repoFileContents,
+    cache
+  );
 
   const repoLabelContents = await getRepoLabels(repo, cache);
 
   return [repoFileContents, repoDirContents, repoLabelContents];
-};
-
-const getRepoDirs = async (
-  repo: Repo,
-  templateDirs: TemplateDirs,
-  repoFileContents: RepoFiles
-) => {
-  const repoDirContents: DirRepoContent = {};
-
-  console.log(`Getting repo '${repo.name}' dirs...`);
-  for (const dir in templateDirs) {
-    const found = repoFileContents.find(
-      (content) => content.type === "dir" && content.name === dir
-    );
-
-    if (typeof found === "undefined") repoDirContents[dir] = [];
-    else {
-      let {
-        data: dirContents,
-      }: {
-        data: RepoFiles;
-      } = await axiosGet(found.url);
-
-      for (const content of dirContents) {
-        if (content.type === "dir") {
-          const type = typeof templateDirs[dir];
-          if (type !== "undefined" && type !== "string") {
-            const { data }: { data: RepoFiles } = await axiosGet(content.url);
-            dirContents = dirContents.concat(data);
-          }
-        }
-      }
-
-      repoDirContents[dir] = dirContents;
-    }
-  }
-  await writeToCache(REPO_DIR(repo), JSON.stringify(repoDirContents));
-  return repoDirContents;
-};
-
-const createMissingDirs = async (
-  octokit: Octokit,
-  repo: Repo,
-  user: User,
-  repoDirContents: Record<string, RepoFiles>,
-  templates: TemplateDirs
-) => {
-  const create = async (path: string, dir: string, content: string) => {
-    console.log(`Creating file '${path}'...`);
-
-    const response = await commitFile(octokit, repo, user, content, path);
-
-    if (response !== null) {
-      repoDirContents[dir].push(response.data.content);
-
-      await writeToCache(REPO_DIR(repo), JSON.stringify(repoDirContents));
-
-      await addToGeneratedFile(repo.name, [path]);
-    }
-  };
-  for (const dir in templates) {
-    const contents = templates[dir];
-    const corresponding = repoDirContents[dir];
-
-    for (const content in contents) {
-      const value = contents[content];
-
-      if (typeof value === "string") {
-        const found = corresponding.find(
-          (real) => real.type === "file" && real.name === content
-        );
-
-        if (!found) await create(`${dir}/${content}`, dir, value);
-      } else {
-        for (const file in value) {
-          const path = `${dir}/${content}/${file}`;
-
-          const found = corresponding.find(
-            (real) => real.type === "file" && real.path === path
-          );
-
-          if (!found) await create(path, dir, value[file]);
-        }
-      }
-    }
-  }
 };
 
 fileCreator();
