@@ -28,7 +28,7 @@
   "scripts": {
     "create": "ts-node src/file-creator.ts",
     "start": "tsc -p ./ -w",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc -p ./",
     "lint": "bash scripts/lint.sh"
   }
 }
