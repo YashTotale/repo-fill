@@ -21,17 +21,23 @@ export interface Label {
 export const getRepoLabels = async (
   repo: Repo,
   cache: Cache
-): Promise<RepoLabels> => {
-  const cachedLabelsFile = cache[REPO_LABELS(repo)];
+): Promise<RepoLabels | null> => {
+  try {
+    const cachedLabelsFile = cache[REPO_LABELS(repo)];
 
-  if (typeof cachedLabelsFile === "string") return JSON.parse(cachedLabelsFile);
-  else {
-    console.log(`Getting repo '${repo.name}' labels...`);
-    const { data: repoLabels } = await axiosGet(
-      repo.labels_url.replace("{/name}", "")
-    );
-    await writeToCache(REPO_LABELS(repo), JSON.stringify(repoLabels));
-    return repoLabels;
+    if (typeof cachedLabelsFile === "string")
+      return JSON.parse(cachedLabelsFile);
+    else {
+      console.log(`Getting repo '${repo.name}' labels...`);
+      const { data: repoLabels } = await axiosGet(
+        repo.labels_url.replace("{/name}", "")
+      );
+      await writeToCache(REPO_LABELS(repo), JSON.stringify(repoLabels));
+      return repoLabels;
+    }
+  } catch (e) {
+    await errorEncountered(e, `Could not get ${repo.name} labels`);
+    return null;
   }
 };
 

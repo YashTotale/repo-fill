@@ -4,6 +4,7 @@ import { Octokit } from "@octokit/rest";
 // Internals
 import { Cache, writeToCache } from "../utils/cache-utils";
 import { addToGeneratedFile } from "../utils/generated-utils";
+import { errorEncountered } from "../utils/error-utils";
 import { User } from "../utils/user-utils";
 import { TemplateFiles } from "../utils/template-utils";
 import { axiosGet, checkOrg, commitFile } from "../helpers";
@@ -17,17 +18,23 @@ const REPO_FILE = (repo: Repo) =>
 export const getRepoFiles = async (
   repo: Repo,
   cache: Cache
-): Promise<RepoFiles> => {
-  const cachedFile = cache[REPO_FILE(repo)];
+): Promise<RepoFiles | null> => {
+  try {
+    const cachedFile = cache[REPO_FILE(repo)];
 
-  if (typeof cachedFile === "string") return JSON.parse(cachedFile);
+    if (typeof cachedFile === "string") return JSON.parse(cachedFile);
 
-  console.log(`Getting repo '${repo.name}' files...`);
-  const { data: repoContents } = await axiosGet(
-    repo.contents_url.replace("{+path}", "")
-  );
-  await writeToCache(REPO_FILE(repo), JSON.stringify(repoContents));
-  return repoContents;
+    console.log(`Getting repo '${repo.name}' files...`);
+
+    const { data: repoContents } = await axiosGet(
+      repo.contents_url.replace("{+path}", "")
+    );
+    await writeToCache(REPO_FILE(repo), JSON.stringify(repoContents));
+    return repoContents;
+  } catch (e) {
+    await errorEncountered(e, `Could not get ${repo.name} files`);
+    return null;
+  }
 };
 
 export const createFiles = async (
@@ -52,7 +59,7 @@ export const createFiles = async (
       if (response !== null) {
         repoContents.push(response.data.content);
         await writeToCache(REPO_FILE(repo), JSON.stringify(repoContents));
-        await addToGeneratedFile(repo.name, [file]);
+        await addToGeneratedFile(repo.name, file);
       }
     }
   }

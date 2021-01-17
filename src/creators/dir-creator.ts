@@ -5,6 +5,7 @@ import { Octokit } from "@octokit/rest";
 import { RepoFiles } from "./file-creator";
 import { Cache, writeToCache } from "../utils/cache-utils";
 import { addToGeneratedFile } from "../utils/generated-utils";
+import { errorEncountered } from "../utils/error-utils";
 import { User } from "../utils/user-utils";
 import { TemplateDirs } from "../utils/template-utils";
 import { axiosGet, checkOrg, commitFile } from "../helpers";
@@ -20,42 +21,49 @@ export const getRepoDirs = async (
   templateDirs: TemplateDirs,
   repoFileContents: RepoFiles,
   cache: Cache
-): Promise<RepoDirs> => {
-  const cachedDirFile = cache[REPO_DIR(repo)];
+): Promise<RepoDirs | null> => {
+  try {
+    const cachedDirFile = cache[REPO_DIR(repo)];
 
-  if (typeof cachedDirFile === "string") return JSON.parse(cachedDirFile);
-  else {
-    const repoDirContents: RepoDirs = {};
+    if (typeof cachedDirFile === "string") return JSON.parse(cachedDirFile);
+    else {
+      const repoDirContents: RepoDirs = {};
 
-    console.log(`Getting repo '${repo.name}' dirs...`);
-    for (const dir in templateDirs) {
-      const found = repoFileContents.find(
-        (content) => content.type === "dir" && content.name === dir
-      );
+      console.log(`Getting repo '${repo.name}' dirs...`);
+      for (const dir in templateDirs) {
+        const found = repoFileContents.find(
+          (content) => content.type === "dir" && content.name === dir
+        );
 
-      if (typeof found === "undefined") repoDirContents[dir] = [];
-      else {
-        let {
-          data: dirContents,
-        }: {
-          data: RepoFiles;
-        } = await axiosGet(found.url);
+        if (typeof found === "undefined") repoDirContents[dir] = [];
+        else {
+          let {
+            data: dirContents,
+          }: {
+            data: RepoFiles;
+          } = await axiosGet(found.url);
 
-        for (const content of dirContents) {
-          if (content.type === "dir") {
-            const type = typeof templateDirs[dir];
-            if (type !== "undefined" && type !== "string") {
-              const { data }: { data: RepoFiles } = await axiosGet(content.url);
-              dirContents = dirContents.concat(data);
+          for (const content of dirContents) {
+            if (content.type === "dir") {
+              const type = typeof templateDirs[dir];
+              if (type !== "undefined" && type !== "string") {
+                const { data }: { data: RepoFiles } = await axiosGet(
+                  content.url
+                );
+                dirContents = dirContents.concat(data);
+              }
             }
           }
-        }
 
-        repoDirContents[dir] = dirContents;
+          repoDirContents[dir] = dirContents;
+        }
       }
+      await writeToCache(REPO_DIR(repo), JSON.stringify(repoDirContents));
+      return repoDirContents;
     }
-    await writeToCache(REPO_DIR(repo), JSON.stringify(repoDirContents));
-    return repoDirContents;
+  } catch (e) {
+    await errorEncountered(e, `Could not get ${repo.name} dirs`);
+    return null;
   }
 };
 
@@ -76,7 +84,7 @@ export const createMissingDirs = async (
 
       await writeToCache(REPO_DIR(repo), JSON.stringify(repoDirContents));
 
-      await addToGeneratedFile(repo.name, [path]);
+      await addToGeneratedFile(repo.name, path);
     }
   };
   for (const dir in templates) {

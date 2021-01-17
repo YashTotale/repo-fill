@@ -2,6 +2,7 @@
 import { existsSync } from "fs";
 import { mkdir, readFile, writeFile } from "fs/promises";
 import { join } from "path";
+import { red } from "chalk";
 
 // Internals
 import { OUTPUT_PATH } from "../constants";
@@ -27,7 +28,7 @@ export const errorEncountered = async (
 
   await writeFile(ERRORS_FILE_PATH, JSON.stringify(errors), "utf-8");
 
-  console.log(message);
+  console.log(red(message));
 };
 
 const defineErrorToJson = () => {

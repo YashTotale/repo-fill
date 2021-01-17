@@ -18,7 +18,7 @@ export const getUserData = async (
   console.log("Getting user...");
   const { data: user } = await octokit.users.getAuthenticated();
 
-  writeToCache(userDataFile, JSON.stringify(user));
+  await writeToCache(userDataFile, JSON.stringify(user));
 
   return user;
 };

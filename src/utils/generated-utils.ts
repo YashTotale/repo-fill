@@ -14,7 +14,7 @@ export const deleteGeneratedFile = async (): Promise<void> => {
 
 export const addToGeneratedFile = async (
   repo: string,
-  files: string[]
+  file: string
 ): Promise<void> => {
   if (!existsSync(OUTPUT_PATH)) await mkdir(OUTPUT_PATH);
   try {
@@ -24,7 +24,7 @@ export const addToGeneratedFile = async (
 
       const newJson = {
         ...json,
-        [repo]: json.repo ? [...json.repo, ...files] : [...files],
+        [repo]: json[repo] ? [...json[repo], file] : [file],
       };
 
       await writeFile(generatedPath, JSON.stringify(newJson), "utf-8");
@@ -34,7 +34,7 @@ export const addToGeneratedFile = async (
     }
   } catch (e) {
     const json = {
-      [repo]: [...files],
+      [repo]: [file],
     };
 
     await writeFile(generatedPath, JSON.stringify(json), "utf-8");

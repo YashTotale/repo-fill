@@ -40,7 +40,7 @@ export const commitFile = async (
       path,
     });
   } catch (e) {
-    await errorEncountered(e, red(`Could not create file '${path}'`));
+    await errorEncountered(e, `Could not create file '${path}'`);
     return null;
   }
 };

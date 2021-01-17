@@ -46,17 +46,35 @@ const fileCreator = async () => {
 
   for (const repo of repos) {
     console.log("\n" + repo.name);
-    const [repoContents, repoDirContents, repoLabelContents] = await getRepo(
-      repo,
-      templateDirs,
-      cache
-    );
+    const [
+      repoFileContents,
+      repoDirContents,
+      repoLabelContents,
+    ] = await getRepo(repo, templateDirs, cache);
 
-    await createFiles(octokit, repo, user, repoContents, templateFiles);
+    if (repoFileContents !== null) {
+      await createFiles(octokit, repo, user, repoFileContents, templateFiles);
+    }
 
-    await createMissingDirs(octokit, repo, user, repoDirContents, templateDirs);
+    if (repoDirContents !== null) {
+      await createMissingDirs(
+        octokit,
+        repo,
+        user,
+        repoDirContents,
+        templateDirs
+      );
+    }
 
-    await createLabels(octokit, repo, user, repoLabelContents, templateLabels);
+    if (repoLabelContents !== null) {
+      await createLabels(
+        octokit,
+        repo,
+        user,
+        repoLabelContents,
+        templateLabels
+      );
+    }
 
     await logRateLimit(octokit);
   }
@@ -113,15 +131,20 @@ const getRepo = async (
   repo: Repo,
   templateDirs: TemplateDirs,
   cache: Cache
-): Promise<[RepoFiles, RepoDirs, RepoLabels]> => {
+): Promise<[RepoFiles | null, RepoDirs | null, RepoLabels | null]> => {
   const repoFileContents = await getRepoFiles(repo, cache);
 
-  const repoDirContents = await getRepoDirs(
-    repo,
-    templateDirs,
-    repoFileContents,
-    cache
-  );
+  let repoDirContents: RepoDirs | null;
+  if (repoFileContents) {
+    repoDirContents = await getRepoDirs(
+      repo,
+      templateDirs,
+      repoFileContents,
+      cache
+    );
+  } else {
+    repoDirContents = null;
+  }
 
   const repoLabelContents = await getRepoLabels(repo, cache);
 
