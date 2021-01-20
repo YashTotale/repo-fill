@@ -124,7 +124,7 @@ const getRepos = async (user: User, cache: Cache): Promise<Repo[]> => {
 
   await writeToCache(orgsFile, JSON.stringify(orgs));
 
-  return repos;
+  return repos.filter(({ fork }) => !fork);
 };
 
 const getRepo = async (
