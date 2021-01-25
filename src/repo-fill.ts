@@ -25,7 +25,7 @@ config();
 
 yargs(process.argv.slice(2)).argv;
 
-const fileCreator = async () => {
+const repoFill = async () => {
   const octokit = new Octokit({
     auth: `token ${process.env.GITHUB_TOKEN}`,
     userAgent: "YashTotale",
@@ -151,4 +151,4 @@ const getRepo = async (
   return [repoFileContents, repoDirContents, repoLabelContents];
 };
 
-fileCreator();
+repoFill();
