@@ -11,7 +11,7 @@
     "yargs": "^16.2.0"
   },
   "devDependencies": {
-    "@octokit/types": "^6.2.1",
+    "@octokit/types": "^6.5.3",
     "@types/dotenv-safe": "^8.1.1",
     "@types/node": "^14.14.20",
     "@types/yargs": "^15.0.12",
