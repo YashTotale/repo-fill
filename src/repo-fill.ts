@@ -25,6 +25,10 @@ config();
 
 yargs(process.argv.slice(2)).argv;
 
+const WHITELISTED_ORGS = ["avwebdev", "hurl-org"];
+
+const BLACKLISTED_REPOS = ["intellij-plugin"];
+
 const repoFill = async () => {
   const octokit = new Octokit({
     auth: `token ${process.env.GITHUB_TOKEN}`,
@@ -45,38 +49,40 @@ const repoFill = async () => {
   const repos = await getRepos(user, cache);
 
   for (const repo of repos) {
-    console.log("\n" + repo.name);
-    const [
-      repoFileContents,
-      repoDirContents,
-      repoLabelContents,
-    ] = await getRepo(repo, templateDirs, cache);
-
-    if (repoFileContents !== null) {
-      await createFiles(octokit, repo, user, repoFileContents, templateFiles);
-    }
-
-    if (repoDirContents !== null) {
-      await createMissingDirs(
-        octokit,
-        repo,
-        user,
+    if (!BLACKLISTED_REPOS.includes(repo.name)) {
+      console.log("\n" + repo.name);
+      const [
+        repoFileContents,
         repoDirContents,
-        templateDirs
-      );
-    }
-
-    if (repoLabelContents !== null) {
-      await createLabels(
-        octokit,
-        repo,
-        user,
         repoLabelContents,
-        templateLabels
-      );
-    }
+      ] = await getRepo(repo, templateDirs, cache);
 
-    await logRateLimit(octokit);
+      if (repoFileContents !== null) {
+        await createFiles(octokit, repo, user, repoFileContents, templateFiles);
+      }
+
+      if (repoDirContents !== null) {
+        await createMissingDirs(
+          octokit,
+          repo,
+          user,
+          repoDirContents,
+          templateDirs
+        );
+      }
+
+      if (repoLabelContents !== null) {
+        await createLabels(
+          octokit,
+          repo,
+          user,
+          repoLabelContents,
+          templateLabels
+        );
+      }
+
+      await logRateLimit(octokit);
+    }
   }
 };
 
@@ -108,18 +114,20 @@ const getRepos = async (user: User, cache: Cache): Promise<Repo[]> => {
   await writeToCache(reposFile, JSON.stringify(repos));
 
   for (const org of orgs) {
-    const orgFile = `org-repos/${org.login}.json`;
-    const cachedOrg = cache[orgFile];
+    if (WHITELISTED_ORGS.includes(org.login)) {
+      const orgFile = `org-repos/${org.login}.json`;
+      const cachedOrg = cache[orgFile];
 
-    let orgRepos;
-    if (typeof cachedOrg === "string") orgRepos = JSON.parse(cachedOrg);
-    else {
-      console.log(`Getting org ${org.login}...`);
-      const { data } = await axiosGet(org.repos_url);
-      orgRepos = data;
+      let orgRepos;
+      if (typeof cachedOrg === "string") orgRepos = JSON.parse(cachedOrg);
+      else {
+        console.log(`Getting org ${org.login}...`);
+        const { data } = await axiosGet(org.repos_url);
+        orgRepos = data;
+      }
+      repos = repos.concat(orgRepos);
+      await writeToCache(orgFile, JSON.stringify(orgRepos));
     }
-    repos = repos.concat(orgRepos);
-    await writeToCache(orgFile, JSON.stringify(orgRepos));
   }
 
   await writeToCache(orgsFile, JSON.stringify(orgs));

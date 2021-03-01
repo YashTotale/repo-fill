@@ -2,7 +2,6 @@
 import { rm } from "fs/promises";
 import { Octokit, RestEndpointMethodTypes } from "@octokit/rest";
 import axios, { AxiosResponse } from "axios";
-import { red } from "chalk";
 
 // Internals
 import { User } from "./utils/user-utils";
