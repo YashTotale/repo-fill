@@ -27,7 +27,7 @@ yargs(process.argv.slice(2)).argv;
 
 const WHITELISTED_ORGS = ["avwebdev", "hurl-org"];
 
-const BLACKLISTED_REPOS = ["intellij-plugin"];
+const BLACKLISTED_REPOS: string[] = [];
 
 const repoFill = async () => {
   const octokit = new Octokit({
