@@ -2,7 +2,7 @@
   "name": "repo-fill",
   "private": true,
   "dependencies": {
-    "@octokit/rest": "^18.1.0",
+    "@octokit/rest": "^18.5.3",
     "@types/recursive-readdir": "^2.2.0",
     "axios": "^0.21.1",
     "chalk": "^4.1.0",
