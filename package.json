@@ -3,7 +3,7 @@
   "private": true,
   "dependencies": {
     "@octokit/rest": "^18.1.0",
-    "@types/recursive-readdir": "^2.2.0",
+    "@types/recursive-readdir": "^2.2.1",
     "axios": "^0.21.1",
     "chalk": "^4.1.0",
     "dotenv-safe": "^8.2.0",
