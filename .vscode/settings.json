@@ -1,7 +1,5 @@
 {
   "files.associations": {
-    ".gitignore": "ignore",
-
     ".env": "text",
     ".env.example": "text",
 
@@ -17,7 +15,6 @@
     ".huskyrc": "json",
     ".lintstagedrc": "json",
 
-    ".snyk": "yaml",
     ".imgbotconfig": "json"
   }
 }
